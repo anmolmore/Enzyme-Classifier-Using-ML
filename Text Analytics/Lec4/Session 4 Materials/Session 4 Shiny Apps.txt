@@ -1,0 +1,8 @@
+# Topic Mining App
+source("https://raw.githubusercontent.com/sudhir-voleti/text-topic-analysis-shinyapp/master/dependency-text-topic-analysis-shinyapp.R")
+runGitHub("text-topic-analysis-shinyapp", "sudhir-voleti")
+
+# Basic Text Analysis App
+source("https://raw.githubusercontent.com/sudhir-voleti/basic-text-analysis-shinyapp/master/dependency-basic-text-analysis-shinyapp.R")
+runGitHub("basic-text-analysis-shinyapp", "sudhir-voleti")
+ 

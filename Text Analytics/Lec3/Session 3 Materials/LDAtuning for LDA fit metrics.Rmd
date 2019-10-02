@@ -1,0 +1,132 @@
+---
+title: 'Finding Optimal #Topics'
+output:
+  html_document:
+    df_print: paged
+---
+
+Class,
+
+Quickly recapping our forays into Latent topic modeling (LTM), we've covered the most popular LTM method - LDA thus far. We've seen how to read LDA output, how to interpret topics etc.
+
+However, recall that LDA (like k-means) requires the optimal #topics to be known a priori. What're the odds given a random corpus, we'll know a priori how many topics should be there?
+
+### Intro to ldatuning
+
+Many methods have been proposed over time on how to measure topic optimality. I present below an R package `ldatuning` that brings together some of the work on this subject under one roof. Behold.
+
+```{r SetupChunk}
+
+suppressPackageStartupMessages({
+if (!require(ldatuning)) {install.packages("ldatuning")}
+if (!require(topicmodels)) {install.packages("topicmodels")}
+
+library("ldatuning")
+library("topicmodels")
+library(tidytext)
+library(magrittr)
+library(dplyr)
+})
+```
+
+### Inbuilt Example
+
+First, an inbuilt example from the package vignette given here: https://cran.r-project.org/web/packages/ldatuning/vignettes/topics.html
+
+```{r}
+data("AssociatedPress", package="topicmodels")
+dtm <- AssociatedPress[1:10, ]
+dim(dtm)
+
+```
+
+For illustration purposes, we're taking just a small 10 document corpus from the inbuilt dataset `AssociatedPress` in the topicmodels package.
+
+```{r}
+system.time({
+result <- FindTopicsNumber(
+  dtm,
+  topics = seq(from = 2, to = 15, by = 1),
+  metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
+  method = "Gibbs",
+  control = list(seed = 77),
+  mc.cores = 2L,
+  verbose = TRUE
+)
+})  # ~ 10 seconds
+
+result
+```
+
+4 metrics are computed and showcased of which 2 (CaoJuan2009 an Arun2010) are minimize metrics whereas the other 2 (Griffiths 2004, Deveaud 2014) are maximization ones. 
+
+How better to see whether or not a plurality of metrics supports a partiocular topic solution or not than by visualizing the same. 
+
+See below.
+```{r}
+FindTopicsNumber_plot(result)
+```
+Look at the figure above and guess what the optimal #topics, K,  should be. 
+
+At K=5, all 4 metrics seem to be converging. While Arun2010 metric has a lower value at K=10, the fact that the other 3 metrics are all in favor of K=5 means we can take a call about K=5.
+
+It is rare that all 4 metrics unanimously point to one optimal K. It is ideal but relatively uncommon. Often we have to judge based on whether a majority or at least a plurality of fit metrics point to a particular K.
+
+### Replicating above on Nokia dataset
+
+Time now to see if the above example which comes from the package vignette generalizes easily to other contexts and datasets.
+
+And to do that we turn to our old favorite, the Nokia Lumia amazon dataset. See below.
+
+```{r}
+require(dplyr)
+# get nokia dataset
+nokia = readLines('https://github.com/sudhir-voleti/sample-data-sets/raw/master/text%20analysis%20data/amazon%20nokia%20lumia%20reviews.txt')
+
+library(tidytext)
+text  = nokia # %>% clean_text(alphanum=TRUE) 
+textdf = data.frame(docID=seq(1:length(text)), text = text, stringsAsFactors=FALSE) 
+
+system.time({
+dtm1 = textdf %>% 
+     mutate(docID = row_number()) %>%    # row_number() is v useful.    
+     group_by(docID) %>%
+     unnest_tokens(word, text) %>%
+     anti_join(stop_words) %>%	
+     count(word, sort = TRUE) %>% ungroup() %>% 
+     cast_sparse(docID, word, n)
+
+  # reorder dtm to sort rows by doc_num and cols by colsums	
+  dtm1 = dtm1[order(as.numeric(rownames(dtm1))),] 
+  b0 = apply(dtm1, 2, sum) %>% order(decreasing = TRUE)
+  dtm1 = dtm1[, b0]  
+})
+```
+
+Am going to use standard tidytext functionality to build DTM and then run ldatuning.
+
+```{r}
+system.time({
+result <- FindTopicsNumber(
+  dtm1,
+  topics = seq(from = 2, to = 20, by = 1),
+  metrics = c("Griffiths2004", "CaoJuan2009", "Arun2010", "Deveaud2014"),
+  method = "Gibbs",
+  control = list(seed = 77),
+  mc.cores = 2L,
+  verbose = TRUE
+)
+})  # 28 seconds for nokia DS
+
+result
+```
+
+And now, finally, let's see what the fit metrics look like and venture a guess on where the optimal K may lie.
+
+```{r}
+  FindTopicsNumber_plot(result)
+```
+
+Chalo, back to the slides.
+
+Sudhir

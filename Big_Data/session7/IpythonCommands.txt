@@ -1,0 +1,14 @@
+export PYSPARK_DRIVER_PYTHON=/home/cloudera/anaconda2/bin/jupyter
+
+export PYSPARK_DRIVER_PYTHON_OPTS="notebook --NotebookApp.open_browser=False --NotebookApp.ip='*' --NotebookApp.port=8880"
+
+export PYSPARK_PYTHON=/home/cloudera/anaconda2/bin/python
+
+#Run PySpark
+pyspark --packages graphframes:graphframes:0.6.0-spark2.3-s_2.11,com.databricks:spark-csv_2.11:1.2.0
+
+
+#If you are using Spark 1.6 then run this.Running GraphFrames
+pyspark --packages graphframes:graphframes:0.1.0-spark1.6,com.databricks:spark-csv_2.11:1.2.0
+
+

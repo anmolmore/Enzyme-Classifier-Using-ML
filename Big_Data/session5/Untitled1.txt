@@ -1,0 +1,30 @@
+sc
+
+pagecounts = sc.textFile("file:///home/cloudera/pagecounts")
+pagecounts.count()
+
+pagecounts.take(10)
+
+enPages = pagecounts.filter(lambda x: x.split(" ")[1] == "en").cache()
+
+enPages.take(10)
+
+enPages.count()
+
+enTuples = enPages.map(lambda x: x.split(" "))
+enKeyValuePairs = enTuples.map(lambda x: (x[0][:8], int(x[3])))
+enKeyValuePairs.count()
+
+enKeyValuePairs.reduceByKey(lambda x, y: x + y, 1).collect()
+
+enPages.map(lambda x: x.split(" "))\
+        .map(lambda x: (x[0][:8], int(x[3])))\
+        .reduceByKey(lambda x, y: x + y, 1)\
+        .collect()
+
+enPages.map(lambda x: x.split(" "))\
+        .map(lambda x: (x[2], int(x[3])))\
+        .reduceByKey(lambda x, y: x + y, 40)\
+        .filter(lambda x: x[1] > 200000)\
+        .map(lambda x: (x[1], x[0]))\
+        .collect()

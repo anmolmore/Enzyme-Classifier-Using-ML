@@ -1,0 +1,75 @@
+---
+title: "Data Collection from News API"
+output: html_document
+---
+* Team Members :
+    - Anmol More - 11915043
+    - Dharani Kiran - 11915033
+    - Shubhendu Sharma - 11915067
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+
+**Step 1 - Signup for an API key at https://newsapi.org/account.**  
+
+Refer to accessible endpoints - https://newsapi.org/docs/endpoints
+
+**Step 2 - Load required packages.**   
+
+We will need `httr`, `RCurl` and `jsonlite` packages in the R Workspace. 
+
+```{r import libraries, warning=FALSE}
+suppressPackageStartupMessages({
+  if (!require(httr)) {install.packages("httr")}; library(httr)
+  if (!require(RCurl)) {install.packages("RCurl")}; library(RCurl)
+  if (!require(jsonlite)) {install.packages("jsonlite")}; library(jsonlite)
+})
+
+```
+
+**Step 3 - As mentioned in doc https://newsapi.org/docs/endpoints/everything**
+** Hit endpoint with search parameter and api key**
+
+```{r querying business analytics news}
+
+search.term <- "business%20analytics"
+api.key <- "8d88c21f6fd7423b9c84c38f78d84703"
+page.size <- 100
+url <- paste0("https://newsapi.org/v2/everything?q=", search.term, "&apiKey=", api.key, "&pageSize=", page.size)
+print(url)
+
+system.time({
+  all.news <- getURL(url) 
+})
+
+news.json <- jsonlite::fromJSON(all.news)
+
+```
+
+**Iterate through news results and create a dataframe**
+
+```{r create dataframe}
+
+source.id <- news.json$articles$source$id
+source.name <- news.json$articles$source$name
+author <- news.json$articles$author
+title <- news.json$articles$title
+description <- news.json$articles$description
+content <- news.json$articles$content
+
+news.df <- data.frame(source.id, source.name, author, title, description, content)
+headers <- c("Source Id", "Source Name", "Author", "Title", "Description", "Content")
+colnames(news.df) <- headers
+
+head(news.df)
+
+```
+
+**Write fetched news results to output file**
+
+```{r generate csv}
+write.csv(news.df, "output_api.csv")
+```
+

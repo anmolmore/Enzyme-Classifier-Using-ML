@@ -1,0 +1,12 @@
+## Regex primer exercise on https://regex101.com/
+
+Text (on ISB from Wiki):
+ISB has been ranked 27th in the world in the 2017 Financial Times Global MBA Rankings.[3] It is the first business school in Indian subcontinent to be accredited by the Association to Advance Collegiate Schools of Business.[4] In 2008, it became the youngest institution to find a place in global MBA rankings when it was ranked 20.[5] Indian School of Business accepts both GMAT and GRE scores for the admission process.
+This is an exclamatory sentence! Is this one an interrogative one? This one has an ellipsis... And this is a declarative sentence. My phone number is 12345 67890 whereas that of the school is +91-040-2318-7000.
+
+Task: Write regex to find:
+1. All instances of numbers in the text (with & w/o '[]’)
+2. Acronyms (capitalized)
+3. All instances where the letter 's' appears twice at word’s ending
+4. Sentence endings
+5. Phone numbers.

@@ -1,0 +1,148 @@
+---
+title: "Clustering Names with stringdist"
+author: "Voleti"
+output: html_document
+---
+
+Class,
+
+Recall text clustering we did in one of the earlier sessions? We used k-means on a DTM. 
+
+Here, we use `stringdist` funcs to cluster together names (brands, car models etc) which are similar in the structure of their names. See below.
+
+```{r setup_chunk}
+
+suppressPackageStartupMessages({
+  
+  if (!require(stringdist)){ install.packages("stringdist")}; library(stringdist)
+  
+require(rvest)
+require(magrittr)
+
+})
+
+```
+
+## Getting the data
+
+Here's the plan. We'll scrape the global 100 best brands list from FT using `rvest` funcs we last saw in DC.
+
+Then we'll use `stringdist` to build a square *distance matrix* between each sting and every other string.
+
+Then we use a clustering algorithm on the distance matrix. Last time it was k-means, this time we'll use *hierarchical clustering* via the `hclust()` func and view its output via a *dendogram*.
+
+Behold.
+
+```{r scraping_data}
+# get top 100 global brands from FT100 list
+url1 <- "https://ig.ft.com/top-100-global-brands/2018/"
+
+system.time({
+brd_names <- read_html(url1) %>% 
+			html_nodes('td:nth-child(4)') %>% 
+			html_text()
+ })  # 1.29 secs
+
+# see what the data are like
+length(unique(brd_names))
+head(unique(as.character(brd_names)))
+```
+
+### Building a distance matrix
+
+`stringdist` makes it trivially easy to build a distance matrix. Just use the `stringdistmatrix()` func only.
+
+See below.
+
+```{r stringdist_matrix}
+## calling the stringdistmatrix function
+
+# taking top 50 only for dendogram clarity
+brands <- unique(as.character(brd_names[1:50]))  
+
+distance_brds <- stringdistmatrix(brands, brands,method = "jw")
+rownames(distance_brds) <- brands
+
+# examining the distance_brds object
+dim(distance_brds)
+distance_brds[1:8, 1:8]
+
+```
+
+### Clustering and viewing output
+
+Time now to cluster the dist matrix and view the results.
+
+```{r}
+# use hierarchical clustering
+hc <- hclust(as.dist(distance_brds))
+
+# visualize the dendrogram
+plot(hc)
+
+```
+
+What does the plot say to you? Do you...
+* detect any 'natural' groupings?
+* Are same-country brands likely to be grouped together? Implying country specific naming conventions?
+* Are same-industry brands likely to be grouped together? Implying industry specific naming norms?
+* etc.
+
+## Clustering R Package names
+
+Another quick example. This link here contains the names of all R packages uploaded to CRAN. 
+
+https://cran.r-project.org/web/packages/available_packages_by_name.html
+
+Below, we:
+
++ scrape the names of all 14k+ R packages on CRAN, 
++ segregate them by string length and 
++ cluster them by `hclust` based on `stringdist`
+
+Behold.
+
+```{r}
+library(rvest)
+library(magrittr)
+library(stringdist)
+
+url1 = "https://cran.r-project.org/web/packages/available_packages_by_name.html"
+
+# scrape the names
+system.time({ a0 <- read_html(url1) %>% html_nodes('td a') %>% html_text()
+    })  # 3.2 secs
+
+# extract all package names with 10 chars
+a1 <- a0[(nchar(a0) == 10)]
+package_names <- unique(as.character(sample(a1, 50)))
+
+package_names[1:20]    # view a few
+```
+
+Now, let's build a dist matrix and run hclust.
+
+```{r}
+distance_names <- stringdistmatrix(package_names, package_names, method = "jw")
+
+rownames(distance_names) <- package_names
+
+# examining the distance_brds object
+dim(distance_names)
+
+# use hierarchical clustering
+hc <- hclust(as.dist(distance_names))
+
+# visualize the dendrogram
+plot(hc)  
+```
+
+Well, any patterns catch your eye? Can we say that package names clustered together due to spelling similarity are actually also similar in terms of operational domain?
+
+What ther applications of this method come to mind?
+
+Chalo. Will stop here. Back to the slides, folks.
+
+Ciao
+
+Sudhir

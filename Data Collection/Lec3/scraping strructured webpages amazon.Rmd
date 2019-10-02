@@ -1,0 +1,159 @@
+---
+title: "Scraping structured webpages - Amazon"
+output:
+  html_document:
+    df_print: paged
+---
+
+### Intro and Background
+
+Aim is to locate 'URL patterns' in structured websites whereby we can *construct* URLs within R/Py as we proceed. We'll use reviews from Anazon for this illustration.
+
+
+```{r}
+# setup chunk
+suppressPackageStartupMessages({
+  
+library(rvest)   # for scraping funcs
+library(XML)     # for parsing and viewing a nodeset
+library(magrittr) # for piping ops
+library(dplyr)   # fopr dataframe ops
+  
+})
+```
+
+
+* First I went to www.Amazon.in, searched for OnePlus, clicked on 'OnePlus 6T (Mirror Black, 6GB RAM, 128GB Storage)' in the results page and arrived here: https://www.amazon.in/OnePlus-Mirror-Black-128GB-Storage/dp/B07DJD1Y3Q
+
+* Next, I do find (Ctrl + F) for reviews, found some 14k+ reviews and clicked on the reviews link. Arrived here: https://www.amazon.in/OnePlus-Mirror-Black-128GB-Storage/product-reviews/B07DJD1Y3Q/ref=dpx_acr_txt?showViewpoints=1
+
+* Then I walked around the page, sorted reviews by 'Most recent' and arrived here: https://www.amazon.in/OnePlus-Mirror-Black-128GB-Storage/product-reviews/B07DJD1Y3Q/ref=cm_cr_arp_d_viewopt_srt?showViewpoints=1&sortBy=recent&pageNumber=1
+
+* Notice how URL composition changes with our actions. E.g., note the tail in last URL above '&sortBy=recent&pageNumber=1'.
+
+* Then I clicked on 'Next page' and arrived here: https://www.amazon.in/OnePlus-Mirror-Black-128GB-Storage/product-reviews/B07DJD1Y3Q/ref=cm_cr_getr_d_paging_btm_next_2?showViewpoints=1&sortBy=recent&pageNumber=2
+
+Notice new URL now? This suggests a definite pattern. Can we construct what, say, page #5's URL will look like? Can we paste in browser and check this: https://www.amazon.in/OnePlus-Mirror-Black-128GB-Storage/product-reviews/B07DJD1Y3Q/ref=cm_cr_getr_d_paging_btm_next_2?showViewpoints=1&sortBy=recent&pageNumber=5
+
+Each page has 10 reviews, so 14,439 reviews will need 1444 pages to hold.
+
+This means that once we write a func to extract relevant quantities/fields from one page, we'll have 1444 pages to loop over.
+
+### Func to Scrape Amazon reviews
+
+Some features we could scrape:
+
+* review heading
+* review date
+* review rating
+* review text
+* review author name
+
+Corresponding to above, find html nodesets and attribiutes to scrape via SelectorGadget:
+
+* '.a-text-bold span' for review heading
+* '.review-text-content span' for review text
+* '.a-profile-name' for review author
+* '.review-date' for review date
+* '.a-icon-alt' for star rating
+
+But even better, the rating area can be separated out from the rest of the junk in the webpage 
+using the '#cm_cr-review_list' upper-level nodeset.
+
+So we could nest the indiv element nodesets above inside this upper-level nodeset, like so:
+
+* html_nodes('#cm_cr-review_list') for the list of 10 reviews, and 
+* '.a-icon-alt' for star rating (12 found), together combine to yield:
+* `html_nodes('#cm_cr-review_list .a-icon-alt')` for the 10 ratings we want.
+
+See below
+
+```{r}
+url1 = "https://www.amazon.in/OnePlus-Mirror-Black-128GB-Storage/product-reviews/B07DJD1Y3Q/ref=cm_cr_getr_d_paging_btm_next_2?showViewpoints=1&sortBy=recent&pageNumber=5"
+page1 = url1 %>% read_html()
+
+nodes1 = page1 %>% html_nodes('#cm_cr-review_list .a-icon-alt'); length(nodes1)
+xmlTreeParse(nodes1[[1]])
+```
+Aha. Now collect the ratings as below:
+
+```{r}
+rating = nodes1 %>% html_text()
+tail(rating)
+```
+
+Similarly, collect other fields as well:
+```{r}
+headings = page1 %>% html_nodes('#cm_cr-review_list .a-text-bold span') %>% html_text()
+head(headings)
+
+review.text = page1 %>% html_nodes('#cm_cr-review_list .review-text-content span') %>% html_text()
+head(review.text)
+```
+And so on.
+
+Below, I construct a simple, user-defined function for one page which we will loop over a few pages for demonstration purposes and move on.
+
+### Write func to scrape one page
+
+```{r}
+scrape_1page <- function(tgt_url){
+  page1 = tgt_url %>% read_html()
+  
+  # fields to collect
+  ratings = page1 %>% html_nodes('#cm_cr-review_list .a-icon-alt') %>% html_text()
+  headings = page1 %>% html_nodes('#cm_cr-review_list .a-text-bold span') %>% html_text()
+  review.text = page1 %>% html_nodes('#cm_cr-review_list .review-text-content span') %>% html_text()
+  authors = page1 %>% html_nodes('#cm_cr-review_list .a-profile-name') %>% html_text()
+  dates = page1 %>% html_nodes('#cm_cr-review_list .review-date') %>% html_text()
+
+  # bind and return as dataFrame
+  out_df = data.frame(ratings, headings, review.text, authors, dates)
+  return(out_df)
+  }
+
+# time and try it on one page
+system.time({
+ page5_df = scrape_1page(url1)
+  })  # 0.89 secs
+```
+### Construct URLs and loop over pages
+
+Let's construct URLs for say 10 pages and loop over them.
+
+By examining the URL structure we have seen that:
+
+* 'https://www.amazon.in/OnePlus-Mirror-Black-128GB-Storage/product-reviews/B07DJD1Y3Q/ref=cm_cr_getr_d_paging_btm_next_2?showViewpoints=1&sortBy=recent&pageNumber=' is the prefix
+* following by page number (numeric)
+
+Say we want to extract the 100th to the 110th page. Now what? Check out the inbuilt sequence func `?seq`
+
+```{r}
+seq1 = seq(from=100, to=110, by=1)
+seq1
+
+url_prefix = 'https://www.amazon.in/OnePlus-Mirror-Black-128GB-Storage/product-reviews/B07DJD1Y3Q/ref=cm_cr_getr_d_paging_btm_next_2?showViewpoints=1&sortBy=recent&pageNumber='
+url_set = paste0(url_prefix, seq1)
+head(url_set)
+```
+Time now to try out the routine we wrote on the pages we are targetting.
+
+```{r}
+# first build empty list to hold the output DFs
+out_list = vector(mode = "list", length = length(seq1))
+
+system.time({
+for (i in 1:length(seq1)){
+  out_list[[i]] = scrape_1page(url_set[i])
+  cat("page ", seq1[i], " processed.\n")
+	}
+})
+
+require(dplyr)
+suppressWarnings({ output_df = bind_rows(out_list) })
+tail(output_df)
+```
+
+Chalo, thats all for now.
+
+Sudhir

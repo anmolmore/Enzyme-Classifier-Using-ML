@@ -1,7 +1,0 @@
-# Basic Text Analysis App
-source("https://raw.githubusercontent.com/sudhir-voleti/basic-text-analysis-shinyapp/master/dependency-basic-text-analysis-shinyapp.R")
-runGitHub("basic-text-analysis-shinyapp", "sudhir-voleti")
-
-# Basic Sentiment Analysis App
-source("https://raw.githubusercontent.com/sudhir-voleti/tidy-sentiment-analysis/master/dependency-tidy-sentiment-analysis.R")
-runGitHub("tidy-sentiment-analysis", "sudhir-voleti")

@@ -1,0 +1,65 @@
+pwd
+
+ls
+
+ls -l
+
+cd ..
+
+cd /
+
+cd home
+
+cd cloudera
+
+mkdir bigdatamanagement
+
+cd /home/cloudera/bigdatamanagement
+
+**Creating a text file
+
+**HDFS Commands
+
+**To get list of all files in a directory in HDFS
+**hdfs dfs -ls <dirname>
+hdfs dfs -ls /
+hdfs dfs -ls /user
+
+**To create a directory in HDFS
+**hdfs dfs -mkdir <dirpath>
+hdfs dfs -mkdir /user/peeyush
+hdfs dfs -mkdir -p /user/dir1/dir
+
+**Copy file to HDFS
+**hdfs dfs -put localpath hdfspath
+hdfs dfs -put /home/cloudera/file1.txt /user/peeyush/file1.txt
+
+**Copy file from HDFS
+**hdfs dfs -get hdfspath localpath
+hdfs dfs -get /user/peeyush/file2.txt /home/cloudera/file4.txt 
+
+**Check file contents
+hdfs dfs -cat /user/peeyush/file2.txt
+
+**Deleting a file or directory
+hdfs dfs -rm /user/peeyush/file2.txt
+hdfs dfs -rmr /user/peeyush
+
+**Appending data to existing file in HDFS
+hdfs dfs -appendToFile /home/cloudera/firstfile.txt /firstfile.txt
+
+**Free space and used space on HDFS directory
+hdfs dfs -df -h
+
+**Used space by directories
+hdfs dfs -du <dirname>
+hdfs dfs -du /user
+
+**Storage statistics for overall cluster
+hdfs dfsadmin -report
+
+**Sometimes you'd get an error saying cannot write to HDFS since HDFS is working in safe mode. **Command for making HDFS writable is
+hdfs dfsadmin -safemode leave
+ 
+
+

@@ -1,0 +1,175 @@
+---
+title: "Zomato Reviews"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+# Import necessary libraries
+
+### https://cran.r-project.org/web/packages/tryCatchLog/vignettes/tryCatchLog-intro.html
+
+```{r}
+suppressPackageStartupMessages({
+  library(rvest) #for webscrapping
+  library(dplyr) #for dataframe operations
+  library(RSelenium) #for selenium web driver
+})
+```
+
+#reviewer user id - each user is unique on zomato and using this, we can identify how old/new user is on zomato. Same can be used to navigate to user profile (even if users change their name)
+
+#review text - can be used for text analytics
+
+#review rating - important to scrap from analytics perspective
+
+#review time - time of review
+
+```{r}
+ReadReviewsForResturant <- function(html_page) {
+  reviews.df <- data.frame(matrix(ncol = 7, nrow = 0))
+  headers <- c("UserId", "Review Text", "Rating", "Time", "Reviews Count", "Followers Count", "Photos Count")
+  colnames(reviews.df) <- headers
+
+  tryCatch({
+    reviewer.id <- html_page %>% html_nodes('.res-large-snippet .header a') %>% html_attr('data-entity_id')
+    review.text <- substring(gsub("\n\\s+", "", html_page %>% html_nodes('.rev-text') %>% html_text()), 7)
+    review.metadata <- gsub("\n\\s+", "", html_page %>% 
+                                         html_nodes('.res-large-snippet .grey-text') %>% 
+                                         html_text())
+    print(review.metadata)
+    review.rating <- as.numeric(substring((html_page %>% 
+                                             html_nodes('.rev-text div') %>% 
+                                             html_attr('aria-label'))[c(TRUE, FALSE)], 7))
+    review.time <- html_page %>% html_nodes('time') %>% html_attr('datetime')
+    
+    current.chunk <- data.frame(reviewer.id, review.text, review.rating, review.time, 0, 0, 0)
+    names(current.chunk) <- headers
+    reviews.df <- rbind(reviews.df, current.chunk)
+  }, error = function(NoSuchElementException) {
+    message("No reviews available, skip !")
+  })
+}
+
+```
+
+# Iterate through each users page, and collect metadata related to reviews count, followers count, photos count
+
+# Append values to reviews dataframe
+
+```{r}
+GetUsersMetadata <- function(reviews.df) {
+  tryCatch({
+    for (id in reviews.df$UserId) {
+      user.url <- paste0("https://www.zomato.com/users/",id)
+      print(user.url)
+      html_page <- user.url %>% read_html()
+      
+      user.metadata.total.reviews.count <- html_page %>% html_node('.user-tab-reviews .ui.label') %>% html_text()
+      user.metadata.followers.count <- html_page %>% html_node('.user-tab-follows .ui.label') %>% html_text()
+      user.metadata.photos.count <- html_page %>% html_node('.user-tab-photos .ui.label') %>% html_text()
+    
+      reviews.df[reviews.df$UserId == id, "Reviews Count"] <- user.metadata.total.reviews.count
+      reviews.df[reviews.df$UserId == id, "Followers Count"] <- user.metadata.followers.count
+      reviews.df[reviews.df$UserId == id, "Photos Count"] <- user.metadata.photos.count
+      
+      Sys.sleep(10)
+    }
+  }, error = function(NoSuchElementException) {
+    message("Error in fetching reviews, skip and continue !")
+  })
+  return(reviews.df)
+}
+```
+
+#Click on load more n times, to load all reviews from page
+
+```{r}
+LoadAllRestaurantReviews <- function(url) {
+  driver <- rsDriver(browser=c("chrome"), port=4444L)
+  browser <- driver[["client"]]
+
+  browser$open()  #open client and navigate to restaurant reviews url
+  browser$navigate(url)
+
+  Sys.sleep(5)
+  
+  all.reviews.link <- tryCatch({
+    browser$findElement(using = 'xpath', "//*[contains(text(), 'All Reviews')]")
+  }, error = function(NoSuchElementException) {
+    browser$close()
+    driver[["server"]]$stop()
+    message("No reviews available, skip !")
+  })
+  if(!is.null(all.reviews.link)) {
+    all.reviews.link$clickElement()
+    
+    #Page takes a while to to load
+    Sys.sleep(3)
+  
+    #Load max 505 reviews
+    tryCatch({
+      for(i in 1:45) {
+          load.more.button <- tryCatch({
+            browser$findElement(using = 'class', "zs-load-more-count")
+          }, error = function(NoSuchElementException) {
+            message("All reviews loaded, continue !")
+            break()
+          })
+          if(!is.null(load.more.button)) {
+            load.more.button$clickElement()
+            Sys.sleep(3)
+          }
+      }
+    }, error = function(NoSuchElementException) {
+       message("All reviews loaded or reviews not present, continue !")
+    }) 
+    
+    page_source <- browser$getPageSource() # read in page contents
+    html_page <- read_html(page_source[[1]])
+    browser$close()
+    
+    # stop the selenium server
+    driver[["server"]]$stop()
+    
+    return(html_page)
+  }
+}
+```
+
+# iterate through each restaurant and fetch reviews and users metadata and write to csv 
+
+```{r}
+#start with base url of 1 restaurant
+#Later iterate through all restaurant
+
+system.time({
+  restaurant.list <- read.csv("restaurant_list.csv")
+  #nrow(restaurant.list)
+  for(row in 1:1) {
+    try({
+      url <- paste0(restaurant.list[row, "url"],"/reviews")
+      restaurant.name <- restaurant.list[row, "restaurant_name"]
+      print(paste("Fetching reviews for :", url))
+      restaurant.page <- LoadAllRestaurantReviews(url)
+      if(!is.null(restaurant.page)) {
+        system.time({
+          reviews.df <- ReadReviewsForResturant(restaurant.page)
+          #reviews.df <- GetUsersMetadata(reviews.df)
+          write.csv(reviews.df, paste0(restaurant.name, ".csv"))
+        })
+      }
+    })
+   }
+})
+```
+
+#Write collected restaurant list to csv file to avoid losing
+
+```{r}
+# reviews.df <- read.csv("Flechazo.csv")
+# print(reviews.df$UserId)
+```
+

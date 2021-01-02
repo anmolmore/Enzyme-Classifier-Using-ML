@@ -1,0 +1,282 @@
+---
+title: "Webscraping basics with rvest"
+output:
+  html_document:
+    df_print: paged
+---
+
+## R’s rvest for webscraping: some examples
+
+Early era work in text-An relied a lot on wordlists, often built manually.
+
+Let’s scrape a glossary (of telecom terms) and build a wordlist using the same in the first of today’s simple exercises.
+
+The idea is to build a telecom industry wordlist by scraping an alphabetical dictionry @ https://glossary.atis.org/
+
+### Step 1: Load Required libraries
+
+```{r setup_chunk}
+
+suppressPackageStartupMessages({
+  
+if (!require(rvest)){install.packages("rvest")}  
+if (!require(stringr)){install.packages("stringr")} 
+if (!require(tidyverse)){install.packages("tidyverse")}   
+
+  library(rvest)
+  library(stringr)
+  library(dplyr)
+  library(magrittr)
+  
+})
+
+```
+
+First off, go examine and explore the website itself. https://glossary.atis.org/
+
+Click on 'A' and 'B'. Check what the URL looks like each time. Can you discern a *sturture* or *pattern* in the urls? If yes, then we're in luck, coz we're dealing with a website comprising structured webpages.
+
+### Step 2: Extract a list of useful links
+
+From the Glossary Homepage, I'll next build a list of URLs corresponding to each alphabet. Kindly follow the code below line-by-line.
+
+```{r}
+# define tgt url
+url <- 'https://glossary.atis.org'    
+
+# extract url content with read_html() func
+url_content <- url %>% read_html()    
+
+system.time({
+
+ # extracting all links in tgt page 
+ links <-  url_content %>% html_nodes('a') %>%  # html_nodes() extracts ANY node type, as per argment
+              html_attr('href')    # html_attr() extracts particular info based on single node attribute
+
+ text <- url_content %>% html_nodes('a') %>% html_text()    # extracting ALL link text from tgt page
+
+ }) # t < 1 sec
+
+# view a few
+rough_dict = data.frame(links, text)
+rough_dict[11:20,]
+
+```
+
+Clearly, not all the links above are relevant. How to filter out the irrelevant ones?
+
+Well, let's re-examine closely the url structure for both link types - relevant and not. Is there any identifying pattern that separates one from the other?
+
+Turns out the relevant links have the term 'search-results' contained in them. I'll next use `stringr` function `str_detect()` to filter in the relevant results. See below.
+
+```{r}
+# filtering by 'search-results' 
+fair_dict <- rough_dict %>% filter(str_detect(links, 'search-results')) 
+
+tail(fair_dict)
+```
+
+Not bad, eh? 28 results with the last 2 being interesting as well. 
+
+### Step 3: Code to Pull requisite Data for One Unit (Letter)
+
+Plan is simple - we’ll figure out how to write rvest code to pull data out for one letter, then rinse and repeat for the rest of the letters.
+
+First pick a random letter, say 'P'. Check out the URL for P terms @ https://glossary.atis.org/search-results/?char=P
+
+There're a total of 698 terms in 'P'. But we see only 10 results per page and there're links to 70 odd pages to cover.
+
+However, we also see the link to 'ALL' which lists all 698 terms @ https://glossary.atis.org/search-results/?char=P&page_number=all&sort=ASC
+
+Could this be a fluke? An outlier or exception? Check a few more, say like so:
+https://glossary.atis.org/search-results/?char=B&page_number=all&sort=ASC
+
+Aha. Seems like we only need to append "&page_number=all&sort=ASC" to the links in `fair_dict` to get what we want... Let's go with this.
+
+Use chrome selector gadget and see what nodes and attributes we need to specify to select only the glossary terms ka text. 
+
+```{r}
+# define tgt url for all terms, say that of letter 'A'
+focal_url = paste(fair_dict$links[1], "&page_number=all&sort=ASC", sep="")
+focal_url   # see if its come out OK
+```
+
+3 critical rvest funcs:
+* `html_nodes()`, 
+* `html_attr()` and 
+* `html_text()` 
+
+```{r}
+# extract glossary terms text
+focal_page <- focal_url %>% 
+                read_html() 
+
+focal_terms <-  focal_page %>% 
+                html_nodes('.term-title') %>% 
+                html_text()
+
+tail(focal_terms)   # view a few
+```
+
+Neat. Note that each glossary term is a hyperlink. 
+
+Suppose like 'focal_terms', we want to extract the hyperlinks for the terms too? 
+
+```{r}
+# extract glossary terms text
+focal_links <- focal_page %>% 
+                html_nodes('.term-title') %>% 
+                html_attr('href')
+
+tail(focal_links)   # view a  few
+```
+
+Now rubber meets road. 
+
+We'll write a simple function to extract the above terms and links from each page, loop across pages and bind results into a dataFrame.
+
+### Step 4: Write a small func to pull data for one letter
+
+```{r}
+# write func to extract from one page
+results_1page <- function(focal_url){
+  
+  focal_page <- focal_url %>% read_html() 
+  
+  focal_terms <-  focal_page %>% html_nodes('.term-title') %>% html_text()
+  
+  focal_links <- focal_page %>% html_nodes('.term-title') %>% html_attr('href')
+  
+  output_df = data.frame(links = focal_links, terms = focal_terms)
+  
+  return(output_df)  }
+
+# trial the func on, say, 'J' - the 10th letter
+focal_url = paste(fair_dict$links[10], "&page_number=all&sort=ASC", sep="")
+system.time({ test_df = results_1page(focal_url) })
+```
+OK, enough testing. Now let's go and run over the main dataset.
+
+### Step 5: Loop the function over all letters
+
+```{r}
+# now invoke func as we loop over A-Z
+out_list = vector(mode="list", length = 26)  # for 26 letters
+
+system.time({
+for (i in 1:26){
+  focal_url = paste(fair_dict$links[i], "&page_number=all&sort=ASC", sep="")
+  out_list[[i]] = results_1page(focal_url)
+}
+})
+
+require(dplyr)
+out_df = bind_rows(out_list)
+dim(out_df)
+out_df[101:110,]
+```
+
+That’s it. We’re done with a simple rvest web scraping exercise.
+
+Clearly, we can scrape much more. For instance, the explanation for each glossary term and so on. We’ll get there in good time.
+
+Quick-check: So, what all funcs do you remember we used? List the same.
+
+## Another example. Scraping a silicon valley website (ycombinator)
+
+Open https://news.ycombinator.com/ and check out the latest newsfeed.
+
+What from here might we want to scrape and collect as data? Some options are:
+* newsstory title
+* source of the news story or 'link domain'
+* score or number of points the story got
+* time since the story was posted on the site
+
+First off, ID the CSS selectors corresponding to these data types of interest like we did previously.
+
+I’ll be more consice here. See if you can follow the steps.
+
+```{r}
+library(rvest)
+
+content <- read_html('https://news.ycombinator.com')
+
+## key is to identify the right css selector or xpath values of the html elements
+# system.time({
+
+ title <- content %>% html_nodes('a.storylink') %>% # use CSS selector tool to ID node 'a.storylink'
+            html_text()   # within above, retain only text.
+ head(title, 10)
+ 
+ ## More CSS selections made and stored in R objects
+ link_domain = content %>% html_nodes('span.sitestr') %>% html_text()
+ score = content %>% html_nodes('span.score') %>% html_text()
+ age = content %>% html_nodes('span.age') %>% html_text()
+
+## Stitch into a df now
+# df <- data.frame(title = title, link_domain = link_domain, score = score, age = age, stringsAsFactors=FALSE)
+# df %>% head(10)    # not working coz one link is missing when I tried it.
+ 
+ #   })    # t=0 secs
+```
+
+Above didn’t work for when I tried it coz one of the links didn;t have a source site.
+
+When such happens, R will simply proceed to the next item (sometimes, it may even stop execution with error).
+
+What that does is mess up the data frame formatting and sequence. Is there a better way? Sure there is. See below.
+
+### Handling exceptions like missing vals.
+
+One logical way to make this work would be to redefine each ‘unit’ that we parse and analyze.
+
+So, let’s define and pull out the entire nodeset for each link at one go, rather than pickup similar nodes from the entire doc at one go.
+
+```{r}
+# Pulling out a full nodeset (tr.athing) instead of single node across nodesets.
+
+ athing_list = content %>% html_nodes('tr.athing')   # discovered 'athing' from page source as node-set element
+
+ length(athing_list)
+ 
+ # building empty vecs for colms
+ title_text = vector(mode="character", length=length(athing_list))
+ link_url = title_text    # so it has same list attribs as title_text.
+ source_site = title_text
+
+# looping over each node-set
+ for (i1 in 1:length(athing_list)){
+
+ # some below may fail as nulls or NAs. Introducing html_attr() to get non-text content classes
+ a0 = athing_list[i1] %>% html_nodes('a.storylink') %>% html_text()
+ a1 = athing_list[i1] %>% html_nodes('a.storylink') %>% html_attr('href')    
+ a2 = athing_list[i1] %>% html_nodes('span.sitestr') %>% html_text()
+
+ # seems empty vec outp was commonest error, so testing for the same using length()
+ ifelse(length(a0>0), {title_text[i1] = a0}, {title_text[i1] = "no title available"}) 
+ ifelse(length(a1>0), {link_url[i1] = a1}, {link_url[i1] = "no link available"}) 
+ ifelse(length(a2>0), {source_site[i1] = a2}, {source_site[i1] = "no site available"})
+
+ cat(i1, " processed.", "\n")
+ 
+  }    # i1 loop ends.  t = 0.78 secs
+```
+
+Notice what we did there? We defined each analysis element as the `.athing` nodeset object.
+
+```{r}
+# now check if all lengths are same and then bind into a df
+
+df = suppressWarnings(
+  data.frame(title_text, link_url, source_site, stringsAsFactors = FALSE))
+
+head(df, 10)
+```
+
+Same result as last time, just the way to get there was different.
+
+Q: So when might you prefer the latter approach and when the former?
+
+OK, will stop here. Heading back to the slides.
+
+Sudhir

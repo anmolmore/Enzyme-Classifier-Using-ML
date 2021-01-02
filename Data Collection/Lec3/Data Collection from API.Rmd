@@ -1,0 +1,214 @@
+---
+title: "DC from APIs"
+author: "Sudhir Voleti @ ISB"
+date: "Apr 2019"
+---
+
+### Introduction
+
+Aim is to look at basic API functionalities & do DC with R.   
+
+First things first. So what are APIs anyway, etc?   
+
+API stands for application programming interface which. as the name suggests *interfaces* between two applications or systems.  In practical terms, they are access protocols to interact with remote databases. 
+
+Because access is typically controlled and metered by the database owners, one has to jump through various hoops like signing up for an *API key*, adhering to usage restrictions and limits, paying access fees etc.
+
+### A simple Weather API
+
+Let's say we are interested in getting weather data. (P.S. now, why might *anyone* want weather data?)  
+
+Multiple APIs abound, like 'Weather Underground', 'openWeatherMap', 'darksky' and etc. We'll see the 'darksky' API.
+
+Later, time permitting, we can also demo another API, the openMovieDatabase.
+
+**Step 1- Signup for an API key**  
+
+Go to https://darksky.net/dev and get the API key. Simple procedure, rest assured.   
+
+Refer to documentation for accessing all features of API @ https://darksky.net/dev/docs
+
+**Step 2 - Load required packages.**   
+
+We will need `httr`, `RCurl` and `jsonlite` packages in the R Workspace. 
+
+```{r, setup}
+
+suppressPackageStartupMessages({
+if (!require(httr)) {install.packages("httr")}; library(httr)
+if (!require(RCurl)) {install.packages("RCurl")}; library(RCurl)
+if (!require(jsonlite)) {install.packages("jsonlite")}; library(jsonlite)
+})
+
+```
+
+**Step 3 - Build API query**  
+
+Say we want Hyderabad's weather forecast.   
+
+As mentioned in the documentation, query URL will be written as *base URL* i.e.   
+
+*  https://api.darksky.net/forecast/   
+*  [key]/  # API key here sans the square brackets  
+*  [latitude],[longitude]  # 17.3850° N, 78.4867° E for Hyd
+*  E.g., https://api.darksky.net/forecast/0123456789abcdef9876543210fedcba/42.3601,-71.0589   
+
+So URL for querying current forecast from DarkSky API for Hyd, we can do:  
+
+https://api.darksky.net/forecast/8364d07f5ad52d598d06c7dfd3a0a69d/17.3850,78.4867  
+
+**Important:** Use your *own* API key after signing up and not mine, which will exceed usage limits and stop working otherwise. Thanks!  
+
+Now we can use `getURL()` function for querying this URL. 
+
+Get the data in JSON format. Then with `fromJSON()`,  convert this JSON object to a R list object. 
+
+Simple, eh?  
+
+```{r querying open weather}
+
+url1 = "https://api.darksky.net/forecast/8364d07f5ad52d598d06c7dfd3a0a69d/17.3850,78.4867" #forecast for Hyderabad
+
+system.time({   
+  forcast = getURL(url1) 
+})  # 12.53 secs. 
+
+forcast1 <- jsonlite::fromJSON(forcast)
+# class(forcast1)   # list
+str(forcast1, max.level=2)    # view top 2 levels of nested list obj
+```
+
+The str() step shows the output list of lists & DFs. Scan it's rather long but totally worthwhile list-structure. ID some fields of interest. Check if all is well.  
+
+In particular, ask Qs such as: Do some fields require special care? Some transformations? Re-formatting into new data types? Etc. 
+
+**Step 4 - Basic Transformations**  
+
+In the JSON response, date is in unix format, so we will use base R's `as.POSIXct()` to convert it to readable R date.   
+
+We then create a data frame of required columns and write this data frame to a csv file.
+
+First off, let's examine the structure of the output in smaller, more manageble chunks.
+
+```{r}
+a0 = forcast1$daily$data  # let Rstudio autofill help!
+# dim(a0)  # 8x39
+a0[1:8, 1:4]
+```
+
+Well, above 'time' refers to the UNIX time format and can be converted in R using POSIXct. See below for a few transformations.
+
+```{r basic transformations}
+
+df = forcast1$daily$data
+
+# Date-time Conversion Function
+df$time = as.POSIXct(df$time,origin = '1970-01-01',tz='GMT')
+df$sunriseTime = as.POSIXct(df$sunriseTime,origin = '1970-01-01',tz='GMT')
+df$sunsetTime = as.POSIXct(df$sunsetTime,origin = '1970-01-01',tz='GMT')
+df$temperatureHighTime = as.POSIXct(df$temperatureHighTime,origin = '1970-01-01',tz='GMT')
+df$temperatureLowTime = as.POSIXct(df$temperatureLowTime,origin = '1970-01-01',tz='GMT')
+
+write.csv(df,"Hyderabad_weather_forcast.csv",row.names = F)    # csv saved to wd
+df
+```
+
+CSV file will be stored in your working directory. To check your working directory you can type `getwd()`. Or just lookup the 'Files' tab in Rstudio's lower right pane.
+
+### Building more queries in DarkSky API
+
+The API documentation gives many call-able data fields. Most are 'optional'. How to narrowly specify and pull only that which we need?
+
+Recall how we were *constructing* URLs for structured web pages (e.g. Amazon reviews)? 
+
+Well, we'll have to similarly *construct* a URL query to be put to the API. This is typically done using the *query string* rules. See here: https://en.wikipedia.org/wiki/Query_string
+
+Below, I demonstrate building a URL query for the API for the following conditions:
+
+* for Hyderabad
+* only *daily* forecast wanted, drop the rest
+* using measurement links automatically selected for this region
+* and in the Hindi language.
+
+So I built the following query accordingly:
+
+* https://api.darksky.net/forecast/8364d07f5ad52d598d06c7dfd3a0a69d/
+* 17.3850,78.4867
+* ?exclude=currently,minutely,hourly,flags,alerts
+* &units=auto
+* &lang=hi
+
+Now let's run the query as previously and check the results.
+
+```{r}
+url2 = "https://api.darksky.net/forecast/8364d07f5ad52d598d06c7dfd3a0a69d/17.3850,78.4867?exclude=currently,minutely,hourly,flags,alerts&lang=hi&units=auto" 
+
+system.time({   
+  forcast2 = getURL(url2) 
+})  # <2 secs. Smaller query --> faster response
+
+forcast3 <- jsonlite::fromJSON(forcast2)
+str(forcast3, max.level=2)  # view top 2 listlevels
+```
+
+Now examine the details minutely.
+```{r}
+df_new=forcast3$daily$data
+colnames(df_new)
+```
+
+And where's the Hindi part?
+
+```{r}
+df_new$summary
+```
+
+That's it for this one. Let's examine another API scraping quickly.
+
+## Querying OpenMovie DB API
+
+The OMDb API is a free web service to obtain movie information. It supports two types of queries - one by search and other by imdb movie id.   
+
+For this API too we'll need an API key. Sigh. Can sign up for Free API key (allows up to 1000 requests daily) from http://omdbapi.com/apikey.aspx
+
+Say we want info on 'em *Harry Potter* movies. This is the plan:  
+
+First, we write an API query to retrieve all movies related to Harry Potter from OMDb.  
+
+Now, our second query will piggyback on one of the output from first query, and specify target movie's imdb id =tt1201607
+
+Please refer to the usage section in API documentation on this link - http://www.omdbapi.com/ , to know more about query parameters. 
+
+```{r libloading}
+library("httr")
+library("RCurl")
+library("jsonlite")
+```
+
+Remember, pls signup for your own key and replace the values below with it. Do **not** run with my key as it'll likely exceed usage limits and become unusable.
+
+```{r OMDb querying}
+# General search for harry potter
+a = getURL("http://www.omdbapi.com/?s=harry%20potter&r=json&apikey=951fc597") 
+
+# narrowed search for a particular HP movie with imdb id
+b = getURL("http://www.omdbapi.com/?i=tt1201607&r=json&tomatoes=true&apikey=951fc597") # imdb id tt1201607 ("Harry Potter and the Deathly Hallows: Part 2") 
+
+# convert JSON output from API to readable form
+x <- jsonlite::fromJSON(a)
+y <- jsonlite::fromJSON(b)
+
+x   # view 1st query's output
+```
+
+Now viewing second query's output.
+
+```{r}
+y
+```
+
+Not hard to see that we can *nest* queries like we did above and progressively drill down to just the info we need, readintoneat lists or DFs or lists of DFs.  
+
+Chalo, dassit for our first API adventure.  
+
+Sudhir

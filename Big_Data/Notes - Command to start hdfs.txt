@@ -1,0 +1,9 @@
+[root@quickstart cloudera]# service hadoop-hdfs-datanode status
+Hadoop datanode is running                                 [  OK  ]
+[root@quickstart cloudera]# service hadoop-hdfs-namenode restart
+no namenode to stop
+Stopped Hadoop namenode:                                   [  OK  ]
+starting namenode, logging to /var/log/hadoop-hdfs/hadoop-hdfs-namenode-quickstart.cloudera.out
+Failed to start Hadoop namenode. Return value: 1           [FAILED]
+
+ 

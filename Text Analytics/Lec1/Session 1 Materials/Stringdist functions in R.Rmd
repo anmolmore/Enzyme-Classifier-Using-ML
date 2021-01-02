@@ -1,0 +1,230 @@
+---
+title: "Stringdist functions in R"
+output: html_document
+---
+
+Class,
+
+Let's explore `stringdist` package functions for TABA. As the name implies, we're now looking at 'distances' between 'strings' - some measure of dissimilairity betwen character vectors. The idea generalizes to vectors of all kinds, not just character.
+
+What possible uses might `stringdist` have? Consider a few:
+
+* Spelling correction in search engines
+* Automatic Spelling correction in large corpora
+* Genome data analysis and Matching DNA sequences
+* Address deduplication
+* Misspelled names recognition
+* Similarity search, Similarity matching
+* Approximate string matching,
+* Fuzzy string matching, comparison, search
+* Pattern matching
+* etc.
+
+Well, so what are we waiting for? Let's jump right in.
+
+```{r setup}
+rm(list=ls())   # clear workspace
+
+# Load the required libraries
+suppressPackageStartupMessages({
+if(!require(stringdist)){install.packages("stringdist")}; 
+library(stringdist)
+
+if (!require(vwr)) {install.packages("vwr")}; library(vwr)
+})
+
+data(english.words)  # from vwr package
+str(english.words)
+wordslist <- english.words
+  
+```
+
+### Introduction
+In this markdown we will explore some common functions in `stringdist` package. 
+
+### amatch()
+
+`amatch()` is a matching equivalent of R's native match and `%in%`.  The default OSA (Optical String Alignment) algorithm is used for matching the distances.
+
+```{r}
+index = amatch("busness", wordslist, maxDist = 3)
+index[1:5]   # what does index vector look like?
+wordslist[index]
+
+index = amatch("hollo", wordslist, maxDist = 2)
+wordslist[index]
+
+index = amatch("hellow", wordslist, maxDist = 2)
+wordslist[index]
+```
+
+Points to ponder upon - possibilities and limitations of the above?
+
+### phonetic()
+
+`phonetic()` translates strings to phonetic codes using the *soundex* encoding algorithms. 
+
+Outputs a soundex code and closer two codes are, the more they sound alike. See some examples.
+
+```{r}
+# What do phonetic codes look like?
+phonetic(c('Euler','Gauss','Hilbert','Knuth','Lloyd','Lukasiewicz','Wachs'), method='soundex')
+```
+
+Now shifting to phonetically similar sounds. See examples below. Which sound alike? 
+
+Observe how close are their soundex codes?
+
+```{r}
+phonetic(c("boar", "bore"))
+phonetic(c("tire", "tyre"))
+phonetic(c("business", "busy"))
+phonetic(c("retire", "tier"))
+phonetic(c("retire", "rentier"))
+```
+
+Points to think about...
+
+Can we build a system to compare how close two character vectors are in *sound space* based on the above?
+
+### qgrams()
+
+Recall ngrams? Well, qgrams are similar with 'q' replacing 'n' and characters replacing word tokens. `qgrams()` computes the character-wise qgrams from the given string, from which distance or dissimilarity computations can next be made.
+
+Below, we are splitting one word into character qgrams of varying lengths.
+
+```{r}
+qgrams('foobar', q=2)
+qgrams('foobar', q=3)
+qgrams('foobar', q=4)
+
+qgrams("business_analytics", q=3)  # a non-foobar example
+```
+
+If we want multiple rows with column names as the qgrams generated we can use this as follows:
+
+```{r}
+x <- "I am currently enrolled in CBA"
+y <- "CBA stands for certificate in business analytics"
+z <- c("Text", "Analytics", "in", "CBA")
+qgrams(A = x, B = y, C = z,q=3)
+```
+
+Possibilities with the above? Can we say which phrases or sentences sound similar using qgrams based distance metrics?
+
+And now finally to the two big funcs we want to see - `stringdist()` and `stringdistmatrix()`.
+
+## stringdist()
+
+`stringdist` calculates distance between strings
+The possible values for matching algorithms are "osa", "lv", "dl", "hamming", "lcs", "qgram",
+"cosine", "jaccard", "jw", and "soundex". But what do these mean? How about a neat little table to show us?
+
+```{r}
+# download table from my git
+stringdist_methods = read.csv("https://raw.githubusercontent.com/sudhir-voleti/sample-data-sets/master/stringdist%20methods.csv")
+
+# display
+stringdist_methods
+
+```
+
+
+```{r}
+
+# example with cosine distances
+stringdist("business","analytics", method = "cosine")
+stringdist("analysis","analytics", method = "cosine")
+
+# example with hamming distances, say
+stringdist('hello', 'jello', method="hamming")
+stringdist('hello', 'holla', method="hamming")
+stringdist('hello', 'jhola', method="hamming")
+
+```
+
+Wouldn't it be cool to get to know which all words in a dictionary are there that are a certain (say Hamming 1 or 2) distance away from a source word? 
+
+See below.
+
+```{r}
+# Using hamming dists to find string 'neighbors'
+hamm = hamming.neighbors('hello', english.words)
+str(hamm)
+```
+
+How would you read the above list structure? It says there are 3 words in the wordslist that are 1 hamming dist away from source word 'hello', some 25 which are 2 hamming dist units away and so on. 
+
+##### stringdistmatrix()
+
+`stringdistmatrix()` is a distance matrix with rows aligned according to first argument and columns aligned according to second argument.
+
+A generalization over the `stringdist()` func, basically.
+
+```{r}
+stringdistmatrix(c('business','analytics'),wordslist[1:10])
+
+```
+
+Possibilities and limitations that immediately come to mind? 
+
+Well, here's one application below.
+
+#### A Sentence correcting function
+
+This function is built using the stringdist methods discussed till now. It tries to replace the incorrect word with the correct wordbased on the dictionary provided. 
+
+* A word is considered incorrect if doesn't exist in the dictionary. 
+* The function tries to find the word closest to the word within a specified maxDist value (typically 2 or less). 
+
+```{r}
+SpellCheck <- function(test){
+  words = strsplit(test,' ')[[1]]
+  index = list()
+  final = ''
+  for(i in 1:length(words)){
+    if(!(words[i] %in% wordslist)){
+      k = amatch(words[i],wordslist,maxDist = 1)
+      final = paste0(final," ",wordslist[k])
+    }else{
+      final = paste0(final," ",words[i])
+    }
+  }
+  print(final)
+}
+
+system.time({ SpellCheck("A quick brown fox jups over the lazy dowgs")
+})
+```
+
+Well, what do you think?
+
+Time to head back to the slides.
+
+Sudhir
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+

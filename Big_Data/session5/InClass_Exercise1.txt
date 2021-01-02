@@ -1,0 +1,14 @@
+#In-class Exercises
+
+
+1) Write code to create an RDD with some numbers. Then create another RDD that filters out those numbers and keeps only even numbers. Finally, print them on screen.
+
+2) For the word count example, modify it so that you are now reading a text file from hard disk (say /yourname/book.txt) and creating an RDD out of it.
+Tweak the code just a little bit so that now you tell me frequently occuring words in descending order. Finally, store the output in a directory (say bookoutput) in cloudera directory of your VM. What do you observe in the output directory?
+
+
+3) You are given a Ipython notebook (Untitled1.ipynb). This notebook has some code that works on a data file. However, you would see that the code does not come with any comments. Your job is to look at each command and provide comments for what that command does. When the command is long (for example, 2 or more functions are used in the command, you would be expected to tell what each function is doing). While you are doing this, please do not run the commands initially. Try to understand the code and guess what the code might be doing. 
+
+For those of you who are not able to open Ipynb file, we are providing same code in untitled1.txt file. This file contains same commands.
+
+

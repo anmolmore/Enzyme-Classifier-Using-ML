@@ -1,0 +1,60 @@
+RT @DeliveryPartne3: @deepigoyal सर दीपेंद्र गोयल मैं जोमाटो कंपनी का पटना में राइडर हूं एक पैर से दिव्यांग व्यक्ति हूं मेरी दिव्यांग पत्नी…
+
+
+
+@Imroopal @cutiepie_1419 @InquisitorDev07 @yenikki301 @DushWoman @Sana_Tokre Wah chalo toh akku ab toh bhej bhai swiggy ya zomato
+
+
+
+@jigneshmawaalee @swiggy_in @Zomato Khud q nahi bana lete ya biwi ko cooking nahi aati hai Kya ?
+
+
+
+@swiggy_in @SwiggyCares mujhe khana chahiye baate ni bhook lagi h mujhe sare hotal band ho chuke h plz hlp me #Zomato #foodpanda https://t.co/Wl8ILAKXJa
+
+
+
+RT @MUNNAKUMARGUPT: @DeliveryPartne3 @deepigoyal @VasundharaBJP @zomatocare @Zomato @TcGehlotOffice @LRD_Bihar @FoodNetwork @MajorPoonia @W…
+
+
+
+RT @MUNNAKUMARGUPT: @DeliveryPartne3 @deepigoyal @VasundharaBJP @zomatocare @Zomato @TcGehlotOffice @LRD_Bihar @FoodNetwork @MajorPoonia @W…
+
+
+
+@jigneshmawaalee @_sabanaqli_ @swiggy_in @Zomato Aabhi se practise karna start kardena. 😂😂
+
+
+
+@jigneshmawaalee @swiggy_in @Zomato Aalsi khid bhi khanna bna lena kabhi
+
+
+
+RT @SurgicalWay: Caption this!
+खुद अब तक भूखे हैं, सबको खिलाने वाले!
+
+#ModiSarkar2 #Article370 #Modi #Hindu #BleedOrange #INDvENG #G20Summi…
+
+
+
+@SanjeevKapoor @KhanaKhazana
+@swiggy_in @Zomato
+जीरा पनीर
+
+https://t.co/5mPQ5N1o05
+
+
+
+curl --request POST \
+--url https://api.twitter.com/1.1/tweets/search/fullarchive/devbox2.json \
+--header 'authorization: Bearer 115683208-cdY9Yru9aaStNHr9QtA2uLTn4khAqpoL33HvPKgm' \
+--header 'content-type: application/json' \
+--data '{
+	"query":"from:swiggy_in lang:en",
+    "maxResults": "100"
+	}'
+	
+	
+	
+    "fromDate":"<YYYYMMDDHHmm>", 
+    "toDate":"<YYYYMMDDHHmm>"

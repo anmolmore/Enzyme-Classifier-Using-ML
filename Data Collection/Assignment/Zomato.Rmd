@@ -1,0 +1,472 @@
+---
+title: "Scrapping zomato restaurant and reviews"
+output: html_document
+---
+* Team Members :
+    - Anmol More - 11915043
+    - Dharani Kiran - 11915033
+    - Shubhendu Sharma - 11915067
+
+* Ref : 
+    - https://www.computerworld.com/article/2971265/how-to-drive-a-web-browser-with-r-and-rselenium.html
+    - https://cran.r-project.org/web/packages/tryCatchLog/vignettes/tryCatchLog-intro.html
+    - https://support.rstudio.com/hc/en-us/community/posts/200658476-R-seems-to-be-in-an-infinite-loop-How-can-I-stop-it-
+
+* Notes :
+    - Latest version of chrome 75.0+ is compatible to latest Rselenium
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+**Import necessary libraries**
+
+```{r import libraries, warning=FALSE}
+suppressPackageStartupMessages({
+  if (!require(rvest)) {library(rvest)} #for webscrapping
+  if (!require(stringr)) {library(stringr)} #for string and regex functions
+  if (!require(dplyr)) {library(dplyr)} #for dataframe operations
+  if (!require(RSelenium)) {library(RSelenium)} #for selenium web driver
+  if (!require(lubridate)) {library(lubridate)} #for timing functions with sleep
+})
+```
+
+**Define zomato url and search area and fetch base url for Gachibowli restuarants**
+
+**This makes the script generic and usable to search for any other city + location pattern**
+
+```{r define search city and location}
+search.city <- 'hyderabad'
+url <- paste0('http://zomato.com/',search.city)
+search.location <- 'Gachibowli'
+```
+
+**Use selenium web driver to navigate to zomato and search for any city and location**
+
+**Function to dynamically fetch the base url to work with.**
+
+```{r function to get search url, message=FALSE}
+GetSearchUrl <- function() {
+  driver <- rsDriver(browser = c("chrome"), port = 4444L, verbose=FALSE, check=FALSE)
+  browser <- driver[["client"]]
+  
+  browser$open()
+  browser$navigate(url)
+  
+  #find search box and enter search area
+  searchbox <- browser$findElement(using = 'id', "keywords_input")
+  searchbox$sendKeysToElement(list(search.location))
+  
+  #Page takes a whole to to load notifications at top
+  Sys.sleep(2)
+  
+  #Click on search button and print title
+  searchbutton <- browser$findElement(using = 'id', "search_button")
+  searchbutton$clickElement()
+  
+  title <- browser$getCurrentUrl()
+  print(title)  #base search url
+  
+  # close browser and stop the selenium server
+  browser$close()
+  driver[["server"]]$stop()
+  
+  end.index <- regexpr('\\?', title)
+  search.base.url <- substring(title,0,end.index-1)
+  print(search.base.url)
+  return(search.base.url)
+}
+```
+
+**Define functions to clean data related to cusines, cost, timings and collections**
+
+```{r define functions to clean restaurants data}
+cuisines.extractor <- function(x){
+  ifelse(
+    is.null(html_node(x, '.clearfix')), 
+    NA,
+    html_node(x, '.clearfix .col-s-11.col-m-12') %>% html_text()
+  )
+}
+
+cost.extractor <- function(x){
+  ifelse(
+    is.null(html_node(x, '.res-cost.clearfix')), 
+    NA,
+    as.numeric(gsub(",", "", gsub("\u20b9", "", html_node(x, '.res-cost.clearfix .col-s-11.col-m-12') %>%
+                                  html_text())))
+  )
+}
+
+timings.extractor <- function(x){
+  ifelse(
+    is.null(html_node(x, '.res-timing.clearfix')), 
+    NA,
+    gsub("\n\\s+", "", html_node(x, '.res-timing.clearfix .col-s-11.col-m-12') %>% html_text())
+  )
+}
+
+collections.extractor <- function(x){
+  ifelse(
+    is.null(html_node(x, '.res-collections.clearfix')), 
+    NA,
+    html_node(x, '.res-collections.clearfix .col-s-11.col-m-12') %>% html_text()
+  )
+}
+```
+
+* Start with search base url
+
+* ?nearby=0 loads search results with pagination excluding nearby locations
+
+* For any issues with selenium webdriver below code can be commented and gachibowli resturant url can be directly used 
+
+```{r get base url, message=FALSE}
+# If selenium load fails due to driver issues, use base url directly
+#search.base.url <- "https://www.zomato.com/hyderabad/gachibowli-restaurants"
+search.base.url <- GetSearchUrl()
+search.base.url <- paste0(search.base.url, "?nearby=0")
+html.page <- search.base.url %>% read_html()
+```
+
+**Identify total number of pages in search results**
+
+```{r count search results}
+pagination.div.text <- html.page %>% html_nodes('.pagination-number div') %>% html_text();
+text.length <- nchar(pagination.div.text)
+search.page.count <- strtoi(substring(pagination.div.text, 11, text.length-1))
+```
+
+**Create empty dataframe with desired columns to store restaurants data**
+
+```{r define df for restaurant list}
+restaurant_list <- data.frame(matrix(ncol = 6, nrow = 0))
+headers <- c("Name", "Cuisines", "Cost", "Timings", "Collections", "url")
+colnames(restaurant_list) <- headers
+```
+
+*Iterate through each page and get resturant data*
+
+```{r}
+#total pages - 41
+for (i in 1:search.page.count) {
+  page_url <- paste0(search.base.url, "&page=",i)
+  print(page_url)
+  restaurant.listing.page <- page_url%>% read_html()
+  
+  restaurant_name <- gsub("\n\\s+","", restaurant.listing.page %>% html_nodes('.fontsize0') %>% html_text())
+  
+  cuisines <- 
+  restaurant.listing.page %>% 
+  html_nodes('.search-page-text.clearfix.row') %>% 
+  sapply(cuisines.extractor)
+
+  cost <- 
+    restaurant.listing.page %>% 
+    html_nodes('.search-page-text.clearfix.row') %>% 
+    sapply(cost.extractor)
+  
+  timings <- 
+    restaurant.listing.page %>% 
+    html_nodes('.search-page-text.clearfix.row') %>% 
+    sapply(timings.extractor)
+  
+  collections <- 
+    restaurant.listing.page %>% 
+    html_nodes('.search-page-text.clearfix.row') %>% 
+    sapply(collections.extractor)
+  
+  url <- restaurant.listing.page %>% html_nodes('.fontsize0') %>% html_attr('href')
+
+  current_results = data.frame(restaurant_name, cuisines, cost, timings, collections, url)
+  restaurant_list <- rbind(restaurant_list, current_results)
+  Sys.sleep(5)
+}
+```
+
+### Checkpoint (1)
+**Write collected restaurant list to csv file to avoid losing list**
+
+```{r}
+write.csv(restaurant_list, "restaurant_list.csv", fileEncoding = "UTF-8", row.names=FALSE)
+```
+
+1. reviewer id - each user is unique on zomato and using this, we can identify how old/new user is on zomato. Same can be used to navigate to user profile (even if users change their name)
+
+2. reviewer.reviews.count - Number of reviews posted by user. Can be used to identify trustness of reviews
+
+3. reviewer.followers - No of followers, probably can be considered more trusted reviews
+
+4. review.text - can be used for text analytics
+
+5. review.rating - important to scrap from analytics perspective
+
+6. review.photos - count of photos uploaded for this review. Make reviews more genuine
+
+7. review.time - time of review
+
+```{r define function to read reviews}
+ReadReviewsForResturant <- function(html.page) {
+  reviews.df <- data.frame(matrix(ncol = 7, nrow = 0))
+  headers <- c("UserId", "Review Text", "Rating", "Time", "Reviews Count", "Followers Count", "Photos Count")
+  colnames(reviews.df) <- headers
+  
+  tryCatch({
+    review.body <- html.page %>% html_nodes('.res-review-body')
+    no.of.reviews <- length(review.body)
+    print(paste("No of reviews visible :", no.of.reviews))
+    
+    reviewer.id <- html.page %>% html_nodes('.res-large-snippet .header a') %>%
+      html_attr('data-entity_id')
+    review.metadata <- gsub("\n\\s+", "", html.page %>% 
+                                         html_nodes('.res-large-snippet .grey-text') %>% 
+                                         html_text())
+    reviewer.reviews.count <- as.numeric(substring
+                                         (review.metadata, 0, regexpr('Review', review.metadata)-1))
+    
+    reviewer.followers <- ifelse(
+      regexpr(',', review.metadata) > 0,
+      as.numeric(
+        substring(review.metadata, (regexpr(
+          ',', review.metadata)+1), (regexpr('Follower',review.metadata)-1))
+        ),
+      0)
+
+    review.text <- substring(gsub("\n\\s+", "", html.page %>% html_nodes('.rev-text') %>% html_text()), 7)
+    review.rating <- as.numeric(substring((html.page %>% 
+                                             html_nodes('.rev-text div') %>% 
+                                             html_attr('aria-label'))[c(TRUE, FALSE)], 7))
+    
+    review.photos <- c()
+    for(i in 1:no.of.reviews) {
+      photos.count <- 0
+      item <- review.body[i]
+      visible.photos.count <- tryCatch ({
+        length(item %>% html_nodes('.parentPhotoBox .js-heart-container'))
+      }, error = function(e) {
+        message("No photos available for review ! ")
+      })
+      if(visible.photos.count >= 6) {
+        additional.photos.count <- 0
+        additional.photos.node <- tryCatch ({
+          item %>% html_nodes('.overlay.res-photo-thumbnail')
+        }, error = function(e) {
+          message("Error in locating additional photos !")
+        })
+        if(length(additional.photos.node) > 0) {
+          additional.photos.text <- gsub("\n\\s+", "", additional.photos.node %>% html_text())
+          additional.photos.count <- as.numeric(
+            substring(additional.photos.text, 2, (regexpr('photos', additional.photos.text)-2))
+          ) 
+        }
+        photos.count <- visible.photos.count + additional.photos.count
+      }
+      else {
+        photos.count <- visible.photos.count
+      }
+      review.photos[i] <- photos.count
+    }
+    
+    review.time <- html.page %>% html_nodes('time') %>% html_attr('datetime')
+    
+    current.chunk <- data.frame(reviewer.id,
+                                review.text,
+                                review.rating,
+                                review.time,
+                                reviewer.reviews.count,
+                                reviewer.followers,
+                                review.photos)
+    names(current.chunk) <- headers
+    reviews.df <- rbind(reviews.df, current.chunk)
+  }, error = function(NoSuchElementException) {
+    print("No reviews available, skip !")
+  })
+  return(reviews.df)
+}
+
+```
+
+**Click on load more n times, to load all reviews from page**
+
+```{r define function to load desired number of reviews in single page}
+LoadAllRestaurantReviews <- function(url) {
+  driver <- rsDriver(browser=c("chrome"), port=4444L, verbose = FALSE, check = FALSE)
+  browser <- driver[["client"]]
+
+  browser$open()  #open client and navigate to restaurant reviews url
+  browser$navigate(url)
+
+  Sys.sleep(2)
+  
+  all.reviews.link <- tryCatch({
+    browser$findElement(using = 'xpath', "//*[contains(text(), 'All Reviews')]")
+  }, error = function(e) {
+    message("No reviews available, skip !")
+    browser$close()
+    driver[["server"]]$stop()
+    return(NULL)
+  })
+  if(!is.null(all.reviews.link)) {
+    all.reviews.link$clickElement()
+    
+    #Page takes a while to to load
+    Sys.sleep(2)
+  
+    #Load max 100 reviews
+    tryCatch({
+      for(i in 1:19) {
+          load.more.button <- tryCatch({
+            browser$findElement(using = 'class', "zs-load-more-count")
+          }, error = function(NoSuchElementException) {
+            message("All reviews loaded, continue !")
+            break()
+          })
+          if(!is.null(load.more.button)) {
+            load.more.button$clickElement()
+            Sys.sleep(6)
+          }
+      }
+    }, error = function(NoSuchElementException) {
+       message("All reviews loaded or reviews not present, continue !")
+    }) 
+    
+    page_source <- browser$getPageSource() # read in page contents
+    html.page <- read_html(page_source[[1]])
+    browser$close()
+    
+    # stop the selenium server
+    driver[["server"]]$stop()
+    
+    return(html.page)
+  }
+}
+```
+
+**Create an empty csv file to collect reviews**
+
+```{r first run setup to write output to csv files }
+first.run <- TRUE
+if(first.run) {
+  restaurant.reviews.df <- data.frame(matrix(ncol = 13, nrow = 0))
+  headers <- c("Name", "Cuisines", "Cost", "Timings", "Collections", "url",
+               "UserId", "Review Text", "Rating", "Time", "Reviews Count", 
+               "Followers Count", "Photos Count")
+  colnames(restaurant.reviews.df) <- headers
+  
+  #Write to empty csv file later append reviews
+  write.csv(restaurant.reviews.df, "restaurant_reviews.csv", row.names=FALSE)
+  
+  #add reviews directory to store individual reviews of restaurant
+  dir.create(file.path(".", "reviews"))
+}
+```
+
+### Checkpoint(2)
+**Logic to fetch reviews data**
+
+* iterate through each restaurant and fetch reviews and users metadata
+* Read previously saved reviews from csv file
+* Bind latest fetched reviews
+* Rewrite reviews to csv
+
+**Rerun only below chunk, from previous checkpoint, if zomato starts blocking**
+
+```{r iterate through restaurant list and fetch reviews, message=FALSE}
+system.time({
+  restaurant.list <- read.csv("restaurant_list.csv", check.names=FALSE)
+  
+  #iterate through each restaurant in restaurant list
+  for(row in 1:2) { #nrow(restaurant.list)
+    tryCatch ({
+      start.time <- lubridate::now()
+      
+      restaurant.name <- restaurant.list[row, "restaurant_name"]
+      cuisines <- restaurant.list[row, "cuisines"]
+      cost <- as.numeric(restaurant.list[row, "cost"])
+      timings <- restaurant.list[row, "timings"]
+      collections <- restaurant.list[row, "collections"]
+      url <- restaurant.list[row, "url"]
+      
+      url <- paste0(url,"/reviews")
+      print(paste("Fetching reviews from :",url))
+      
+      restaurant.page <- LoadAllRestaurantReviews(url)
+      
+      # If reviews tab is present, proceed to fetch else mark reviews as NA
+      if(!is.null(restaurant.page)) {
+        reviews.df <- ReadReviewsForResturant(restaurant.page)
+        
+        if(nrow(reviews.df) > 0) {
+          # Write reviews of each restaurant to separate file as well
+          write.csv(reviews.df, paste0("reviews/", restaurant.name, ".csv"), row.names=FALSE)
+          print(paste("No of reviews read :",nrow(reviews.df)))
+        }
+        else {
+          # if no reviews are available under reviews tab, add row with NA values
+          headers <- c("UserId", "Review Text", "Rating", "Time", "Reviews Count",
+                       "Followers Count", "Photos Count")
+          reviews.df <- data.frame(NA, NA, NA, NA, NA, NA, NA)
+          names(reviews.df) <- headers
+        }
+      }
+      else {
+        # if reviews tab it not available at all, add row with NA values
+        headers <- c("UserId", "Review Text", "Rating", "Time", "Reviews Count",
+                     "Followers Count", "Photos Count")
+        reviews.df <- data.frame(NA, NA, NA, NA, NA, NA, NA)
+        names(reviews.df) <- headers
+      }
+      
+      reviews.df <- cbind(Name = restaurant.name,
+                            Cuisines = cuisines,
+                            Cost = cost,
+                            Timings = timings,
+                            Collections = collections,
+                            url = url,
+                            reviews.df)
+      
+      restaurant.reviews.df <- read.csv("restaurant_reviews.csv", check.names=FALSE)
+      restaurant.reviews.df <- rbind(restaurant.reviews.df, reviews.df)
+      write.csv(restaurant.reviews.df, "restaurant_reviews.csv",
+                fileEncoding = "UTF-8", row.names=FALSE)
+      print(paste("Completed fetching reviews for :",
+                  restaurant.name, "in",
+                  round(as.numeric(lubridate::now() - start.time)), "seconds"))
+      Sys.sleep(10)
+    }, error = function(e) {
+      print(e)
+      Sys.sleep(300)
+      message("Error in processing, continue to next restaurant !")
+    })
+  }
+})
+```
+
+**Commonly known issues with RStudio and RsDriver**
+
+* R Studio hangs after continous run for long hours. On Mac exectution has to be stopped and everything under /Users/<user id>/.rstudio-desktop has to be deleted
+* Zomato returns status 403 (Forbidden, if stats blocking), 404 (Zomato server goes down or doesn't responds)
+* Time taken to fetch
+    - First run 594 restaurants - 12 hours 5 minutes (R Studio Hanged waiting for driver status)
+    - Second run 27 restaurants - 9 minutes (Just last few remaining restaurants with no reviews)
+  
+**Verifications of reviews loaded and counts**
+
+```{r verify all restaurants were loaded, eval=FALSE}
+
+restaurant.list <- read.csv("restaurant_list.csv")
+print(paste("No of restaurants in Gachibowli :",nrow(restaurant.list)))
+
+restaurant.reviews <- read.csv("restaurant_reviews.csv")
+print(paste("No of restaurants for which reviews were loaded", length(unique(restaurant.reviews$Name))))
+
+temp = list.files(path="reviews/")
+count = 0
+for (i in 1:length(temp)) {
+  rows <- as.numeric(nrow(read.csv(paste0("reviews/",temp[i]))))
+  count <- count + rows
+}
+print(paste0("No of restaurants with atleast 1 review :", length(temp)))
+print(paste0("Total no of reviews fetched :", count))
+```
+

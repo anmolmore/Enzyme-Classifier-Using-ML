@@ -1,0 +1,294 @@
+---
+title: "Exploring udpipe NLP workflows in R"
+author: "S Voleti"
+output:
+  html_document:
+    df_print: paged
+---
+
+Hi all,
+
+While py's Spacy is great and all, R has some solid NLP going for it too. Presenting the udpipe package, based on [Stanford's *Universal Dependency* (ud) Linguistic typology](http://universaldependencies.org/).  
+
+Recall the requirements/building blocks expected from an *ideal* NLP workflow:  
+
++  1. Tokenisation
++  2. Parts of speech tagging
++  3. Lemmatisation
++  4. Morphological feature tagging
++  5. Syntactic dependency parsing
++  6. Named entity recognition (NER)
++  7. Extracting word & sentence meaning
+
+UDPipe provides the standard NLP functionalities of tagging, parsing and dependency evaluations - all within R. [5x slower than Spacy but scalability is apparently not a concern due to easy parallelization](http://www.bnosac.be/index.php/blog/75-a-comparison-between-spacy-and-udpipe-for-natural-language-processing-for-r-users).   
+
+And it comes pre-packaged with trained models in as many as **52 languages** (including some desi ones). So why, wait, let's start. First, with the setup code chunk.  
+
+### Setup
+
+Here, we (i) install and load required libraries, and (ii) download trained models in different languages that we'll later invoke and use.  
+
+```{r setup}
+# setup code block
+suppressPackageStartupMessages({
+if (!require(udpipe)){install.packages("udpipe")}
+if (!require(textrank)){install.packages("textrank")}
+if (!require(lattice)){install.packages("lattice")}
+if (!require(igraph)){install.packages("igraph")}
+if (!require(ggraph)){install.packages("ggraph")}
+if (!require(wordcloud)){install.packages("wordcloud")}
+
+library(udpipe)
+library(textrank)
+library(lattice)
+library(igraph)
+library(ggraph)
+library(ggplot2)
+library(wordcloud)
+library(stringr)
+})
+
+# setup working dir
+#setwd('C:\\Users\\31172\\TABA\\Session 4\\Session 4 Materials\\');  getwd()
+
+# Download language models in English, Spanish and Hindi (say). Uncomment or copy from LMS.
+#system.time({
+
+#  ud_model_english <- udpipe_download_model(language = "english")  # 3.05 secs
+#  ud_model_spanish <- udpipe_download_model(language = "spanish")  #  secs
+#  ud_model_hindi <- udpipe_download_model(language = "hindi")  # secs
+
+#	}) # ~ 114 secs, depends on comp & connection speeds.
+```
+
+Site where updated language models for udpipe can be downloaded from: https://lindat.mff.cuni.cz/repository/xmlui/handle/11234/1-2998#
+
+### Basic udpipe functionality
+
+To see udpipe's basic functionality, let's return to an old favorite - the Nokia dataset.   
+
+Plan is to read in the data from my github page, and annotate the corpus displaying udpipe's tagging and parsing capabilities in the process.  
+
+```{r basic_func}
+# get data first
+require(stringr)
+nokia = readLines('https://raw.githubusercontent.com/sudhir-voleti/sample-data-sets/master/text%20analysis%20data/amazon%20nokia%20lumia%20reviews.txt')
+nokia  =  str_replace_all(nokia, "<.*?>", "") # get rid of html junk 
+str(nokia)
+
+# ?udpipe_download_model   # for langu listing and other details
+
+# load english model for annotation from working dir
+english_model = udpipe_load_model("./english-ewt-ud-2.4-190531.udpipe")  # file_model only needed
+ 
+# now annotate text dataset using ud_model above
+# system.time({   # ~ depends on corpus size
+  x <- udpipe_annotate(english_model, x = nokia) #%>% as.data.frame() %>% head()
+  x <- as.data.frame(x)
+#	})  # 13.76 secs
+
+# str(x);  
+  head(x, 4)
+```
+Let's examine the annotated doc output in a little more detail.  Can you identify the following requirements in the output?
+
++  1. Tokenisation - colmns 1-3, 5-6 in the annotated doc
++  2. Parts of speech tagging  - colms `xpos` and `upos`
++  3. Lemmatisation - colm `lemma`
++  4. Morphological feature tagging - colm `feats`
++  5. Syntactic dependency parsing - colms 11-13 in the annotated doc. 
+
+Note we have the standard penn treebank based POSTags in there, under the colm `xpos`. We also have a simpler set of udpipe based POSTags too, in colm `upos`. 
+
+A simple explanation for points 2-5 above [can be found here](http://universaldependencies.org/format.html).
+
+Let's apply the above for some simple ops. Recall chunking from previously? Well, we can again detect and extract phrases by defining patterns of interest. See below.   
+
+```{r phrase_extr}
+table(x$xpos)  # std penn treebank based POStags
+table(x$upos)  # UD based postags
+
+# So what're the most common nouns? verbs?
+all_nouns = x %>% subset(., upos %in% "NOUN") 
+top_nouns = txt_freq(all_nouns$lemma)  # txt_freq() calcs noun freqs in desc order
+head(top_nouns, 10)	
+
+all_verbs = x %>% subset(., upos %in% "VERB") 
+top_verbs = txt_freq(all_verbs$lemma)
+head(top_verbs, 10)
+```
+Neat, eh? Can we do more? For instance, can we inquire into `collocations` (i.e. repeated n-grams) and `co-occurrences` (i.e., token pairs co-occurring in the same sentence/ paragraph/ document/ etc)?  
+
+Why might you want to do this? One reason is keyword identification and extraction from masses of unstructured text.   
+
+Let's see some quick examples below, via inbuilt routines `keywords_collocation()` and `cooccurrence()`.
+
+### Collocations and Cooccurrences
+
+```{r colloc}
+# Collocation (words following one another)
+nokia_colloc <- keywords_collocation(x = x,   # try ?keywords_collocation
+                              term = "token", 
+                              group = c("doc_id", "paragraph_id", "sentence_id"),
+                              ngram_max = 4)  # 0.42 secs
+
+str(nokia_colloc)
+nokia_colloc %>% head()
+
+# Sentence Co-occurrences for nouns or adj only
+nokia_cooc <- cooccurrence(   	# try `?cooccurrence` for parm options
+		      x = subset(x, upos %in% c("NOUN", "ADJ")), 
+                      term = "lemma", 
+                      group = c("doc_id", "paragraph_id", "sentence_id"))  # 0.02 secs
+# str(nokia_cooc)
+head(nokia_cooc)
+
+# general (non-sentence based) Co-occurrences
+nokia_cooc_gen <- cooccurrence(x = x$lemma, 
+                      relevant = x$upos %in% c("NOUN", "ADJ")) # 0.00 secs
+# str(nokia_cooc_gen)
+head(nokia_cooc_gen)
+
+# Skipgram based Co-occurrences: How frequent do words follow one another within skipgram number of words
+nokia_cooc_skipgm <- cooccurrence(x = x$lemma, 
+                      relevant = x$upos %in% c("NOUN", "ADJ"), 
+                      skipgram = 4)  # 0.05 secs
+
+
+# str(nokia_cooc_skipgm)
+head(nokia_cooc_skipgm)  # sorted in descending order
+```
+
+Well, its one thing to see things laid out in a table. Quite another to see it *visualized*.
+
+```{r coorc.visualizn}
+# Visualising top-30 co-occurrences using a network plot
+library(igraph)
+library(ggraph)
+library(ggplot2)
+
+wordnetwork <- head(nokia_cooc, 50)
+wordnetwork <- igraph::graph_from_data_frame(wordnetwork) # needs edgelist in first 2 colms.
+
+ggraph(wordnetwork, layout = "fr") +  
+
+  geom_edge_link(aes(width = cooc, edge_alpha = cooc), edge_colour = "orange") +  
+  geom_node_text(aes(label = name), col = "darkgreen", size = 4) +
+  
+  theme_graph(base_family = "Arial Narrow") +  
+  theme(legend.position = "none") +
+  
+  labs(title = "Cooccurrences within 3 words distance", subtitle = "Nouns & Adjective")
+```
+Last but not least, here's a nice example of using regex from session 1 to define phrase definitions and extract them from udpipe output.  
+
+Below, I use `as_phrasemachine()` to convert upos POSTags to simeple one-letter POSTags for easier manipulation in code, following this convention:  
+
+Phrases (A:adjective, C:coordinating conjuction, D:determiner, M:modifier of verb, N:noun, P:preposition). 'O' is 'outside' for punctuations etc.
+
+```{r adv_phrases}
+x$phrase_tag <- as_phrasemachine(x$upos, type = "upos")
+  # x$phrase_tag[1:10];  x$upos[1:10];  x$token[1:10]   # uncomment & run to see what it does
+
+# Building noun phrases thus (a adjective+noun, pre/postposition, optional determiner and another adjective+noun)
+regexed_phrases <- keywords_phrases(x = x$phrase_tag, 
+                          term = x$token, 
+                          pattern = "(A|N)+N(P+D*(A|N)*N)*", 
+                          is_regex = TRUE, 
+                          ngram_max = 4, 
+                          detailed = FALSE)
+
+head(subset(regexed_phrases, ngram > 2))
+```
+### UDPipe for other languages
+
+Let's try spanish, not lease because it has the same roman/latin alphabet and conveniently, has an inbuilt dataset in udpipe we can invoke directly.
+
+```{r spanish}
+data(brussels_reviews)    # using inbuilt dataset in udpipe package
+  # str(brussels_reviews);  head(brussels_reviews)
+  
+comments <- subset(brussels_reviews, language %in% "es")  # only for spanish comments
+
+spanish_model = udpipe_load_model("./spanish-gsd-ud-2.4-190531.udpipe")
+
+# system.time({
+  x <- udpipe_annotate(spanish_model, x = comments$feedback[1:50])
+  x <- as.data.frame(x)
+# })  # 32.2 secs
+
+#str(x)
+head(x, 10)
+```
+
+Neat, eh? Time now to move to desi languages.
+
+### POSTagging Hindi text
+
+I'm going to use Hindi text from Wikipedia's Bharat page by 'rvesting' it, of course. Behold.
+
+```{r hindi}
+
+require(stringr)
+library(rvest)
+
+url = 'https://hi.wikipedia.org/wiki/%E0%A4%AD%E0%A4%BE%E0%A4%B0%E0%A4%A4'
+
+page = read_html(url)
+nodes  = html_nodes(page,'p')
+text = html_text(nodes)
+text = text[text != '']
+
+text  =  str_replace_all(text, "<.*?>", " ") # get rid of html junk 
+  # str(text)
+
+hindi_model = udpipe_load_model("./hindi-hdtb-ud-2.4-190531.udpipe")
+
+# system.time({
+  x <- udpipe_annotate(hindi_model, x = text)
+  x <- as.data.frame(x)
+# })  # 9.2 secs
+
+# str(x);  
+head(x, 10)   # UTF-8 encoding inside a DF doesn't display on R console. But it will for vectors.
+```
+
+To get the Hindi script to display on the R console, do the following (after much trial and error - if anybody has a better solution, lemme know asap).
+
+```{r hindi.display}
+windowsFonts(devanew=windowsFont("Devanagari new normal"))
+# However vector support devnagri scripts
+head(x$token)    # Yay!
+```
+
+And other things we did for the english wale models, all are now applicable here too. Ensoi...
+
+```{r hindi.ops}
+table(x$xpos)  # std penn treebank based POStags
+table(x$upos)  # UD based postags
+
+# So what're the most common nouns? verbs?
+all_nouns = x %>% subset(., upos %in% "NOUN"); all_nouns$token[1:20]
+
+top_nouns = txt_freq(all_nouns$lemma)
+head(top_nouns$key, 20) 
+
+all_verbs = x %>% subset(., upos %in% "VERB") 
+top_verbs = txt_freq(all_verbs$lemma)
+head(top_verbs$key, 20)
+```
+
+Last but not least, let's do one final display aid for Hindi.
+
+```{r wordcl}
+library(wordcloud)
+wordcloud(words = top_nouns$key, 
+          freq = top_nouns$freq, 
+          min.freq = 2, 
+          max.words = 100,
+          random.order = FALSE, 
+          colors = brewer.pal(6, "Dark2"))
+```
+OK, dassit for now. Questions? Comments? 
+
+Sudhir

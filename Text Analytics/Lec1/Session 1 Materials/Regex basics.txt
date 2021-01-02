@@ -1,0 +1,64 @@
+## ===== Regex basics =====
+
+# links of interest: http://www.regular-expressions.info/quickstart.html
+# regex app for practice: https://regex101.com/
+# regex for R in particular: http://www.regular-expressions.info/rlanguage.html
+
+### Metacharacters
+Twelve characters have special meanings in regular expressions: 
+1. the backslash \, 2. the caret ^, 3. the dollar sign $, 4. the period or dot ., 
+5. the vertical bar or pipe symbol |, 6. the question mark ?, 7. the asterisk or star *, 
+8. the plus sign +, 9. the opening parenthesis (, 10. the closing parenthesis ), 
+11. the opening square bracket [, and 12. the opening curly brace {. 
+
+These special characters are often called "metacharacters". Most of them are errors when used alone.
+
+If you want to use any of these characters as a literal in a regex, you need to escape them with a backslash. 
+E.g., to match 1+1=2, the correct regex is 1\+1=2. 
+
+### Character Class
+
+A "character class" matches only one out of several characters. 
+Use a hyphen inside a character class to specify a range of characters. E.g., [0-9] matches a single digit between 0 and 9. 
+Typing a caret (^) after the opening square bracket negates the character class.
+
+### Shorthand Character Classes
+
+\d matches a single character that is a digit, 
+\w matches a "word character" (alphanumeric characters plus underscore), and 
+\s matches a whitespace character (includes tabs and line breaks).  
+
+\t matches a tab character (ASCII 0x09), 
+\r carriage return (0x0D) and 
+\n for line feed (0x0A).
+
+The dot matches a single character, except line break characters.
+
+### Anchors
+Anchors do not match any characters. They match a position. 
+^ matches at the start of the string, and $ matches at the end of the string.
+E.g. ^b matches only the first b in bob.
+
+\b matches at a word boundary. A word boundary is a position between a character that can be matched by \w and a character that cannot be matched by \w.
+
+###Alternation
+Alternation is the regular expression equivalent of "or". E.g., cat|dog matches cat in About cats and dogs.
+
+Alternation has the lowest precedence of all regex operators. cat|dog food matches cat or dog food. 
+To create a regex that matches cat food or dog food, you need to group the alternatives: (cat|dog) food.
+
+### Repetition
+The question mark makes the preceding token in the regular expression optional. E.g., colou?r matches colour or color.
+
+The asterisk or star tells the engine to attempt to match the preceding token zero or more times. 
+The plus tells the engine to attempt to match the preceding token once or more. 
+E.g., <[A-Za-z][A-Za-z0-9]*> matches an HTML tag without any attributes. <[A-Za-z0-9]+> is easier to write but matches invalid tags such as <1>.
+
+Use curly braces to specify a specific amount of repetition. 
+E.g., Use \b[1-9][0-9]{3}\b to match a number between 1000 and 9999. 
+\b[1-9][0-9]{2,4}\b matches a number between 100 and 99999.
+
+### Grouping and Capturing
+
+Place parentheses around multiple tokens to group them together. You can then apply a quantifier to the group. 
+E.g., Set(Value)? matches Set or SetValue.

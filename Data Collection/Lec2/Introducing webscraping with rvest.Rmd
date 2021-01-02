@@ -1,0 +1,168 @@
+---
+title: "Introducing webscraping with rvest"
+output:
+  html_document:
+    df_print: paged
+---
+
+Class,
+
+Time now to scrape websites for a variety of data:
+
+* text
+* hyperlinks
+* images
+* numbers and tables
+* etc.
+
+We'll extract data from the Internet Movies DataBase IMDB (www.imdb.com) using `rvest` package in R, a very easy and useful package for extracting data from *static* HTML pages. 
+
+You will need to install SelectorGadget (https://selectorgadget.com/) on a chrome browser. What is this and why do we need it? Let me quote from their site:
+
+> SelectorGadget is an open source tool that makes CSS selector generation and discovery on complicated sites a breeze. Just install the Chrome Extension or drag the bookmarklet to your bookmark bar, then go to any page and launch it. A box will open in the bottom right of the website. Click on a page element that you would like your selector to match (it will turn green). SelectorGadget will then generate a minimal CSS selector for that element, and will highlight (yellow) everything that is matched by the selector. Now click on a highlighted element to remove it from the selector (red), or click on an unhighlighted element to add it to the selector. Through this process of selection and rejection, SelectorGadget helps you come up with the perfect CSS selector for your needs.
+
+### Extracting IMDB's top 250 movies
+
+Let's say we want to extract information from IMDB on [Top 250 movies page](http://www.imdb.com/chart/top?ref_=nv_wl_img_3). 
+
+Open this page in web browser and also read this page in R session with rvest's `read_html()` function.
+
+```{r}
+suppressPackageStartupMessages({
+  
+  if (!require(rvest)){install.packages("rvest")}
+  if (!require(XML)){install.packages("XML")}
+
+  library("rvest")
+  library("XML")
+})
+
+# IMDB Top 250 Movies
+url = "http://www.imdb.com/chart/top?ref_=nv_wl_img_3"
+page = read_html(url)
+```
+
+### Step 1: Find CSS selectors for quantities of interest
+
+Now open the SelectorGadget in chrome and find css selector for any movie link in the Top 250 list. You should get ".titleColumn a" css selector for the movie link.
+
+With this css selector, we can find *all* the HTML nodes from rvest's `html_nodes()` func. 
+
+Next, We use `xmlTreeParse` function to see the contents of that html node. 
+
+```{r}
+movie.nodes = html_nodes(page,'.titleColumn a')
+
+# Check one node
+xmlTreeParse(movie.nodes[[1]])
+```
+
+Seems as if the movies node has three types of relevant information: 
+* Movie link (e.g., "<a href="/title/tt0111161/?pf_rd_m=A2..."), 
+* Movie Name (e.g., ">The Shawshank Redemption</a>"), and 
+* Movie cast. (e.g., "title="Frank Darabont (dir.), Tim Robbins, Morgan Freeman>")
+
+So we'll extract all this info from all movie nodes in the target page, and store as 3 separate vectors - 1 for each field. 
+
+### Step 2: Extract Quantities of interest
+
+```{r}
+require(magrittr)
+movie.link = movie.nodes %>% html_attr("href")
+movie.link[1:5]   # view a few
+movie.link = paste("http://www.imdb.com", movie.link, sep="")  # prefixing siteURL
+
+cat("\n")
+cat("A sample of movie.link we scraped\n")
+movie.link[1:5]   # view a few
+cat("\n")
+
+movie.cast = movie.nodes %>% html_attr("title")
+cat("A sample of movie.cast we scraped\n")
+movie.cast[1:5]   # view a few
+cat("\n")
+
+movie.name = movie.nodes %>% html_text()
+cat("A sample of movie.name we scraped\n")
+movie.name[1:4]
+```
+
+### Step 3: Detecting & extracting additional fields
+
+Now that we've come this far, suppose we also want to extract info on:
+* year in which each movie was released
+* IMDB average rating for each movie
+* number of ratings each movie received
+
+Again, use Selectorgadget and find the CSS selectors. Rest is straightforward.
+
+For example, CSS selector for 'year' is ".secondaryInfo".
+
+```{r}
+year = page %>% html_nodes(".secondaryInfo") %>% html_text()
+year[1:4]
+```
+
+Uh-oh. Clearly, 'year' needs a bit of cleanup. See below.
+
+```{r}
+# post-process to get numeric years
+year = year %>% gsub(")", "", .) %>%   # remove trailing ')'
+		            gsub("\\(", "", .) %>%  # remove first '('
+		            as.numeric()
+
+year[1:5]
+```
+
+Similarly we can scrape imdb ratings. The CSS selector for this is '.imdbRating'.
+
+```{r}
+rating.nodes = page %>% html_nodes('.imdbRating')
+
+# Check One node
+xmlTreeParse(rating.nodes[[1]])
+```
+
+From SelectorGadget, the CSS selectors of interest are '.imdbRating strong' and 'title' for votes.
+
+See below.
+
+```{r}
+# Collect and correct the node
+rating.nodes = page %>% html_nodes('.imdbRating strong')
+
+votes = rating.nodes %>% html_attr('title')
+votes[1:4]
+```
+
+Clearly, above needs refinement.
+
+```{r}
+# post-process & cleanup
+votes = votes %>% gsub('.*?based on ','', .) %>% 
+		  gsub(' user ratings','', .) %>%
+		  gsub(',', '', .)  
+
+votes[1:4]
+```
+
+And lastly, the rating itself.
+```{r}
+rating = rating.nodes %>% html_text() %>% as.numeric()
+rating[1:5]
+```
+
+### Step 4: Store scraped data in nice, DF format
+
+Now we can store all the extracted information in a data frame and write it to a csv file for later use. 
+
+```{r}
+top250 = data.frame(movie.name, movie.cast, movie.link,year,votes,rating)
+head(top250)
+
+write.csv(top250,'IMDB Top 250.csv', row.names = F) # writes to getwd()
+```
+
+That's it for an introductory tour of the joys of webscraping static sites.
+
+Sudhir

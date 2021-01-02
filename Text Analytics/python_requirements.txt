@@ -1,0 +1,12 @@
+google
+pandas
+BeautifulSoup4
+request
+urlopen
+urllib3
+textblob
+naiveBayesClassifier
+random2
+nltk
+stem
+spacy

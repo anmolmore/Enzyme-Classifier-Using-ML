@@ -1,0 +1,115 @@
+<html>
+
+<head>
+<title>My example webpage</title>
+</head>
+
+<meta name="description" content="A basic HTML primer">
+<meta name="keywords" content="HTML, code, tags">
+<meta name="author" content="Voleti @ ISB">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+<body>
+Hi all, <p>
+
+Welcome to this quick HTML primer. There are 2 documents to look at - the original html code written on a text-editor and the saved version as an html file which can be opened in a browser. <p>
+
+The body of your webpage, enclosed within the "body" tags, contains basically everything other than the title and metadata.<p>
+
+Just to recall, the "title" tag above (view-able in the text-editor or page-source), is the name that will be displayed as the tab title when it’s opened in a browser.<p>
+
+Consider the three levels of hierarchical headers coming up next:<p>
+
+<h1>Big and Important Header with the "h1" tags</h1>
+Then some intro 'big-picture' text. <p>
+
+Note that when a header displays, there's a line-break automatically baked in between header and the text following.<p>
+
+<h2>Slightly Less Big Header under "h2"</h2>
+And some more detailed text.
+
+<h3>Sub-Header under "h3"</h3>
+Followed by, I guess, even more detailed, footnote and annotation level text.<p>
+
+In what follows, I'll use the sub-headers to denote sections.
+
+<h3>Doc structure tags: Paragraphs and Breaks</h3>
+Below are paragraph tags denoted by "p" which start a new paragraph. These usually insert two line breaks.
+Look, for example, at the break between the previous line and this one. That’s what a "p" tag will do.
+
+<p>Our first paragraph. Blah Blah Blah. Now I want 2 line breaks before the next para.</p>
+<p>Our second paragraph. Howzzat?</p>
+
+Note: We can also use CSS tags to further highlight and markup paragraph level structures in our doc. See below.
+<p style="font-size: 120%;">Using CSS tags with attribute "font-size" to make 20% larger text</p>
+
+The line break tag "br" inserts a single line break:
+<p>The first line. Note this is still within the same paragraph as the second line...<br>
+The second line (close to the first one).</p>
+
+<h3>Some other basic markup tags</h3>
+Other basic markups like bold and italics can follow with tags such as "strong" or "b" and "em" respectively.
+<strong>Very important things you want to say, using the "strong" tag.</strong>
+<em>An emphasized line, using the "em" tag.</em>
+
+When you’re quoting another website or person and you want to set the quote apart from the rest of your document, the blockquote tag will do it for you. All you need to do is enclose the quote in opening and closing blockquote tags:
+<blockquote>"Take control your life. Or someone else will." - Jack Welch</blockquote>
+
+<h3>Links, images</h3>
+The "a" or anchor tag lets us create links. A simple link looks like this:
+<a href="//www.isb.edu/>Go to ISB website from this link</a>
+
+The “href” attribute identifies the destination of the link. In many cases, this will be another website. It could also be a file, like an image or a PDF.
+
+Other useful attributes include “target” and “title.” The target attribute is almost exclusively used to open a link in a new tab or window, like this:
+<a href="//www.isb.edu/" target="blank">Go to the ISB site in a new tab</a>
+
+Other attributes such as "title" inside the anchor tag do other cool things like give out tooltips when the browser hovers over a link. Hover over the link below to see what I mean:
+<a href="//www.isb.edu/" title="This is a COOLtip">Hover over this one</a>
+
+If you want to embed an image in your page, you’ll need to use the image tag. The simplest way to use it is to simply add the source of the image in the “src” attribute, like this:
+<img src="http://www.isb.edu/sites/default/files/imagecache/new_slider/Responsive-home-page-Jan32018-EFPM-1.jpg">
+<p>
+<p>
+
+Further, there are a number of other attributes you’ll like want to use, like “height,” “width,” and “alt.” Here’s how that might look:
+<img src="http://www.isb.edu/sites/default/files/imagecache/new_slider/Responsive-home-page-Jan32018-EFPM-1.jpg" width="320" alt="the name of your image"> 
+<p>
+<p>
+
+<h2>Building Tables in html</h2>
+Oftentimes, we may want to use rows and columns inside a tabular structure to segment info and structure the display on our page. 
+<p>
+While the high level tags for table viz "table" and "tbody" are easy to see, there're a number of tags such as "th" for table-header or columns, "tr" for table-row and "td" for table-data that populates cells, that can be used to structure data inside an HTML table. <p>
+
+Take a look at this example and you’ll see what I mean:
+<p>
+<table>
+<tbody>
+
+<tr>
+<th>First column</th>
+<th>Second column</th>
+</tr>
+
+<tr>
+<td>Row 1, column 1</td>
+<td>Row 1, column 2</td>
+</tr>
+
+<td>Row 2, column 1</td>
+<td>Row 2, column 2</td>
+
+</tbody>
+</table>
+
+<p>
+<p>
+OK. That's it. I've written this whole thing in a notepad (text-editor, basically). Let me now close it, save it as an html file and reopen in browser.
+
+<p>
+<p>
+<b>Sudhir. Jan 2018.</b>
+
+</body>
+</html>

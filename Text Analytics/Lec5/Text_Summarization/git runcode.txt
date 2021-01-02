@@ -1,0 +1,3 @@
+# Text summarization app 
+source("https://raw.githubusercontent.com/sudhir-voleti/text_summarization/master/global%20dependencies.R")
+runGitHub("text_summarization","sudhir-voleti")

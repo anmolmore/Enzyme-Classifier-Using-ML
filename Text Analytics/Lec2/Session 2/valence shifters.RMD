@@ -1,0 +1,159 @@
+---
+title: "Valence Shifters for Sentiment-An"
+output: html_document
+---
+### Sentiment analysis with sentimentR
+
+Loading required libraries
+```{r setup}
+if (!require(sentimentr)) {install.packages("sentimentr")} # ensure java is up to date!
+library(sentimentr)
+library(dplyr)
+library(ggplot2)   # for visualizing sentimt variation
+```
+
+#### Sentiment scoring using valence shifters
+
+SentimentR uses valence shifters (i.e., *negators*, *amplifiers* (intensifiers), *de-amplifiers* (downtoners), and *adversative conjunctions* to compute the score, which change the meaning but are not taken into account by usual dictionary based packages.
+
+Behold a simple example.
+
+```{r}
+sent1 <- "I like to learn new things"
+sent2 <- "I not so much like to learn new things"
+ 
+sentiment(sent1)
+sentiment(sent2)
+```
+
+### Valence Shifters in action
+
+Consider a list of simple-ish sentences and how `sentimentr` treats the various valence shifters contained therein.
+
+To see what valence shifters are available in the `lexicon` package, run the following:
+```{r}
+require(lexicon)
+hash_valence_shifters
+
+hash_valence_shifters[y==1][1:8]  # to see top 8  negators
+hash_valence_shifters[y==2][1:8]  # to see amplifiers wala list
+hash_valence_shifters[y==3][1:8]  # for de-amplifiers list
+hash_valence_shifters[y==4]   # for adversative conjunctions
+```
+
+
+```{r valShift1}
+sentiment("I like it.")  # simple sent
+sentiment("I don't like it.")  # negation
+
+sentiment("I hate it.")   # simple sent
+sentiment("I don't hate it.")  # negation
+sentiment("But I don't hate it.")  # negation with adverserial conjunction
+```
+
+#### De-amplifiers or downtoners
+
+I'd expect de-amplifiers like may, somewhat, sort of etc. to dampen the sentiment score of a sentence. Let's see whether and to what extent that happens.
+
+```{r}
+sentiment("I not like it.")   # another negation
+sentiment("I may not like it.")  # negation with a de-amplifier
+sentiment("I almost don't like it.")  # negation with a de-amplifier
+sentiment("I hardly like it.")    # de-amplifier or downtoner
+sentiment("I sort of like it.")   # more de-amplifier or downtoner
+sentiment("I somewhat like it.")  # more de-amplifier or downtoner
+```
+
+#### Amplifiers or intensifiers
+
+Amplifiers like 'really', 'absolutely', 'surely' etc. will intensify the valence in a sentence.
+
+```{r}
+sentiment("I really like it.")   # amplifier or intensifier
+sentiment("I never like it.")   # negation + amplifier
+sentiment("I sure like it.")   # straight amplifier
+
+```
+
+#### Repeat negations
+```{r}
+sentiment("I'm not happy.")    # single negation
+sentiment("I'm not unhappy.")  # double negation
+sentiment("I don't feel not unhappy.")   # triple negation!
+
+```
+
+#### Adversative conjunctions
+```{r}
+sentiment("But I don't like it.")  # Adversative conjunction + negation
+sentiment("I didn't like it but now I like it.")   # adversative conjunction
+sentiment("I didn't like it and now I like it.")   # non-adversative conjunction
+
+```
+
+So what all did we see above?
+
+### Analyzing groups of sentences
+Sometimes we want to analyse the sentences as a group rather than a single sentence. We can use the `sentiment_by()` function to group the sentences according to a criteria. It averages the sentiment from each sentence and outputs an aggregated value
+
+```{r}
+sent3 <- "I hate reading. But I love comic books."
+
+sentiment(sent3)
+sentiment_by(sent3)
+```
+
+### Extracting words from score calculation
+
+We can extract the words which were used for polarity calculation and also the polarity they contributed.
+
+```{r}
+sent3   # view sent3 again
+words <- extract_sentiment_terms(sent3)
+
+attributes(extract_sentiment_terms(sent3))$elements
+```
+
+### Applying to Nokia dataset
+
+How about we apply this to a size-able dataset and not just a few small sentences here and there, eh?
+
+Plan next is to apply the above to the Nokia Lumia reviews dataset.
+
+```{r nokiaEg}
+nokia = readLines('https://github.com/sudhir-voleti/sample-data-sets/raw/master/text%20analysis%20data/amazon%20nokia%20lumia%20reviews.txt')
+
+review1 = nokia[1]   # try first review 
+sentiment_by(review1)  # get aggregate polarity for the whole review
+
+# get polarity by indiv sentence
+a0.df = review1 %>% 
+	get_sentences() %>% # inbuilt sentence-parsing
+	sentiment()    # sentiment for each sentence parsed
+a0.df
+
+# get aggreg polarity for the whole corpus
+system.time({ nokia_senti = sentiment_by(nokia) })  # 0.39 secs
+nokia_senti[1:15,]    # view first 15 rows
+
+```
+
+### Visualizing Sentiment over Doc length
+
+How might sentiment levels vary over the length of a document? Is there an upward trend? downward trend? No trend? How to know? HOw better in fact, than to visualize the same and see for ourselves?
+
+Am using ggplot2 below. Code is straightforward to follow.
+```{r}
+require(ggplot2)
+p <- ggplot(a0.df, aes(x = a0.df$sentence_id, y = a0.df$sentiment)) + 
+geom_smooth(col="blue", se=FALSE) + geom_hline(yintercept=0) + 
+geom_smooth(method="lm", formula=y~x, col="red", se=FALSE) 
+p
+```
+
+
+Closing with that for now.
+
+Ciao
+
+Sudhir

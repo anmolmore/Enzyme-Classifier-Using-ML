@@ -1,0 +1,409 @@
+---
+title: <center><span style = "color:purple">TWITTER SENTIMENT ANALYSIS</span></center>
+output: html_notebook
+---
+
+<br>
+
+## Install Packages
+
+<br>
+
+```{r}
+install_github("geoffjentry/twitteR")
+```
+
+<br>
+
+## Importing Packages
+
+<br>
+
+```{r}
+library(devtools)
+library(rjson)
+library(httr)
+library(bit64)
+library(twitteR)
+```
+
+<br>
+
+## Twitter Authentication
+
+<br>
+
+```{r}
+api_key <- "H3LIB13Iqw7H5SqfISNBOdICr"
+api_secret <- "Uru0fV7lKAiFG9ZXy6L7R3jIMUzLSGH2WplhFu2nMuT8sc4CnW"
+access_token <- "3236008555-P3bJUfr6ElRfnrgBQMfRz0B1fCQKX9FWzCiq3ZP"
+access_token_secret <- "4Xpp1x9Iuc7PK6YHbKKjvhWLhHaJNkOaWvwiMHFsw9w7T"
+setup_twitter_oauth(api_key, api_secret, access_token, access_token_secret)
+```
+
+<br>
+
+## Collecting Tweets for Zomato
+
+<br>
+
+```{r}
+zomato <- searchTwitter("Zomato",n = 5000, lang = "en")
+length(zomato)
+```
+
+<br>
+
+## Collecting Tweets for Swiggy
+
+<br>
+
+```{r}
+swiggy <- searchTwitter("Swiggy", n = 5000, lang = "en")
+length(swiggy)
+```
+
+<br>
+
+## Cleaning the Corpus
+
+<br>
+
+```{r}
+head(zomato)
+head(swiggy)
+```
+
+```{r}
+zt <- sapply(zomato, function(x) x$getText())
+st <- sapply(swiggy, function(x) x$getText())
+```
+
+```{r}
+catch.error <- function(x)
+{
+  # Let us create a missing value for test purpose
+  y <- NA
+  # Try to catch that error (NA) which we have just created
+  catch_error <- tryCatch(tolower(x), error = function(e) e)
+  # If not an error
+  if(!inherits(catch_error, "error"))
+    y <- tolower(x)
+  # Check result if error exists, otherwise the function works fine
+  return(y)
+}
+
+cleanTweets <- function(tweet)
+{
+  # Clean the tweet for sentiment analysis
+  # Remove html links, which are not required for sentiment analysis
+  tweet <- gsub("(f|ht) (tp) (s?) (://) (.*) [.|/] (.*)", " ", tweet)
+  # First we will remove the reweet entities from the sorted tweets (text)
+  tweet <- gsub("(RT|via) ((?:\\b\\W*@\\w+)+)", " ", tweet)
+  # Then remove all "#HashTags"
+  tweet <- gsub("#\\w+", " ", tweet)
+  # Then remove all "@People"
+  tweet <- gsub("@\\w+", " ", tweet)
+  # Then remove all punctuations
+  tweet <- gsub("[[:punct:]]", " ", tweet)
+  # Then remove numbers, we need only text for analysis
+  tweet <- gsub("[[:digit:]]", " ", tweet)
+  # Finally we remove all unnecessary spaces (white spaces, tabs etc)
+  tweet <- gsub("[ \t]{2,}", " ", tweet)
+  tweet <- gsub("^\\s+|\\s+$", " ", tweet)
+  # Convert into lowercase 
+  tweet <- catch.error(tweet)
+  tweet
+}
+```
+
+```{r}
+cleanTweetsAndRemoveNAs <- function(Tweets)
+{
+  TweetsCleaned <- sapply(Tweets, cleanTweets)
+  # Remove the "NA" tweets from this tweet list
+  TweetsCleaned <- TweetsCleaned[!is.na(TweetsCleaned)]
+  names(TweetsCleaned) <- NULL
+  # Remove the repetitive tweets from this tweet list
+  TweetsCleaned <- unique(TweetsCleaned)
+  TweetsCleaned
+}
+```
+
+```{r}
+ZomatoCleaned <- cleanTweetsAndRemoveNAs(zt)
+length(ZomatoCleaned)
+```
+
+```{r}
+SwiggyCleaned <- cleanTweetsAndRemoveNAs(st)
+length(SwiggyCleaned)
+```
+
+<br>
+
+## Estimating Sentiment Part-A
+
+<br>
+
+```{r}
+opinion.lexicon.pos <- scan('positive-words.txt', what = 'character',
+                            comment.char = ";")
+opinion.lexicon.neg <- scan('negative-words.txt', what = 'character',
+                            comment.char = ";")
+```
+
+```{r}
+head(opinion.lexicon.pos)
+head(opinion.lexicon.neg)
+```
+
+```{r}
+neg.words <- c(opinion.lexicon.neg, "cancellation", "wtf", "wait", "waiting" )
+pos.words <- opinion.lexicon.pos
+```
+
+```{r}
+getSentimentScore <- function(sentences, words.positive, words.negative, .progress = 'None')
+{
+  require(plyr)
+  require(stringr)
+  
+  scores <- laply(sentences, function(sentence, words.positive, words.negative){
+    
+    # Let first remove the digit, punctuation character and control characters
+    sentence <- gsub("[[:cntrl:]]", "", gsub("[[:punct:]]", "", gsub("\\d+", "", sentence)))
+    
+    # Then lets convert all to lower sentence case
+    sentence <- tolower(sentence)
+    
+    # Now lets split each sentence by the space delimiter
+    words <- unlist(str_split(sentence, "\\s+"))
+    
+    # Get the boolean match of each words with the positive and negative opinion-lexicon
+    pos.matches <- !is.na(match(words, words.positive))
+    neg.matches <- !is.na(match(words, words.negative))
+    
+    # Now get the score as total positive sentiment minus the total negatives
+    score <- sum(pos.matches) - sum(neg.matches)
+    
+    return(score)
+  }, words.positive, words.negative, .progress = .progress)
+  
+  # Return a dataframe with respective sentence and the score
+  return(data.frame(text = sentences, score = scores))
+}
+```
+
+```{r}
+options(warn = -1)
+ZomatoResults <- getSentimentScore(ZomatoCleaned, words.positive = pos.words, 
+                                   words.negative = neg.words)
+SwiggyResults <- getSentimentScore(SwiggyCleaned, words.positive = pos.words, 
+                                   words.negative = neg.words)
+```
+
+```{r}
+library(ggplot2)
+library(gridExtra)
+p1 <- ggplot(ZomatoResults, aes(x = score)) + geom_bar(stat = "count", fill = "purple") + 
+  labs(title = "Zomato Scores", x = "Scores", y = "Frequency") + xlim(c(-6, 6)) + 
+  ylim(c(0,2500))
+p2 <- ggplot(SwiggyResults, aes(x = score)) + geom_bar(stat = "count", fill = "red") + 
+  labs(title = "Swiggy Scores", x = "Scores", y = "Frequency") + xlim(c(-6, 6)) + 
+  ylim(c(0,2500))
+grid.arrange(p1, p2, nrow = 1)
+```
+
+```{r}
+mean(ZomatoResults$score)
+sd(ZomatoResults$score)
+mean(SwiggyResults$score)
+sd(SwiggyResults$score)
+```
+
+<br>
+
+## Estimating Sentiment Part-B
+
+<br>
+
+```{r}
+install.packages("Rstem",
+repos = "http://www.omegahat.org/R", type="source")
+require(devtools)
+install_url("http://cran.r-project.org/src/contrib/Archive/sentiment/sentiment_0.2.tar.gz")
+require(sentiment)
+ls("package:sentiment")
+```
+
+```{r}
+library(sentiment)
+```
+
+```{r}
+# Classify emotion function returns an object of class data frame 
+# With seven columns (anger, disgust, fear, joy, sadness, suprise, best fit) and one row for each document
+
+ZomatoClass <- classify_emotion(ZomatoCleaned, algorithm = "bayes", prior = 1.0)
+SwiggyClass <- classify_emotion(SwiggyCleaned, algorithm = "bayes", prior = 1.0)
+```
+
+```{r}
+head(ZomatoClass)
+head(SwiggyClass)
+```
+
+
+```{r}
+ZomatoEmotion <- ZomatoClass[, 7]
+SwiggyEmotion <- SwiggyClass[, 7]
+```
+
+```{r}
+ZomatoEmotion[is.na(ZomatoEmotion)] <- "unknown"
+SwiggyEmotion[is.na(SwiggyEmotion)] <- "unknown"
+```
+
+```{r}
+head(ZomatoEmotion, 20)
+head(SwiggyEmotion, 20)
+```
+
+```{r}
+ZomatoClassPol <- classify_polarity(ZomatoCleaned, algorithm = "bayes")
+swiggyClassPol <- classify_polarity(SwiggyCleaned, algorithm = "bayes")
+```
+
+```{r}
+head(ZomatoClassPol)
+```
+
+```{r}
+head(swiggyClassPol)
+```
+
+```{r}
+# We will fetch polarity category best fit for our analysis purpose
+ZomatoPol <- ZomatoClassPol[, 4]
+SwiggyPol <- swiggyClassPol[, 4]
+```
+
+```{r}
+# Let us create now a data frame with the above results
+ZomatoDF <- data.frame(text = ZomatoCleaned, emotion = ZomatoEmotion, polarity = ZomatoPol,
+                       stringsAsFactors = FALSE)
+SwiggyDF <- data.frame(text = SwiggyCleaned, emotion = SwiggyEmotion, polarity = SwiggyPol,
+                       stringsAsFactors = FALSE)
+```
+
+```{r}
+# Rearrange data inside the data frame by sorting it
+ZomatoDF <- within(ZomatoDF, emotion <- factor(emotion, levels = names(sort(table(emotion),
+                                                                          decreasing = T))))
+SwiggyDF <- within(SwiggyDF, emotion <- factor(emotion, levels = names(sort(table(emotion),
+                                                                          decreasing = T))))
+```
+
+```{r}
+head(ZomatoDF, 10)
+head(SwiggyDF, 10)
+```
+
+
+```{r}
+plotSentiments <- function(df,title)
+{
+  ggplot(df, aes(x = emotion)) +
+    geom_bar(aes(y = ..count.., fill = emotion)) + 
+    scale_color_brewer(palette = "Dark2") + 
+    ggtitle(title) + theme(legend.position = "right") + 
+    ylab("Number of Tweets") +
+    xlab("Emotion Categories") + 
+    ylim(c(0,4000))
+}
+```
+
+```{r}
+plotSentiments(ZomatoDF,"Sentiment Analysis of Tweets on Twitter about Zomato")
+```
+
+```{r}
+plotSentiments(SwiggyDF,"Sentiment Analysis of Tweets on Twitter about Swiggy")
+```
+
+```{r}
+# Similarly we will plot distribution in the tweets 
+plotSentiments2 <- function(df, title)
+{
+  ggplot(df, aes(x = polarity)) +
+    geom_bar(aes(y = ..count.., fill = polarity)) + 
+    scale_color_brewer(palette = "RdGy") + 
+    ggtitle(title) + theme(legend.position = "right") + 
+    ylab("Number of Tweets") +
+    xlab("Polarity Categories") +
+    ylim(c(0, 4000))
+}
+```
+
+```{r}
+plotSentiments2(ZomatoDF, "Polarity Analysis of Tweets on Twitter about Zomato")
+```
+
+```{r}
+plotSentiments2(SwiggyDF, "Polarity Analysis of Tweets on Twitter about Swiggy")
+```
+
+```{r}
+removeCustomeWords <- function (TweetsCleaned) 
+{
+    for(i in 1:length(TweetsCleaned))
+    {
+        TweetsCleaned[i] <- tryCatch({
+        TweetsCleaned[i] = removeWords(TweetsCleaned[i],
+                                        c(stopwords("english"), "care", "guys", "can", 
+                                          "dis", "didn","guy" ,"booked", "plz", "order",
+                                          "ordered", "get", "hey", "also"))
+        TweetsCleaned[i]
+                                     }, error=function(cond) 
+                                       {
+                                            TweetsCleaned[i]
+                                       }, warning=function(cond) 
+                                         {
+                                              TweetsCleaned[i]
+                                         })
+    }
+    return(TweetsCleaned)
+}
+```
+
+```{r}
+getWordCloud <- function(sentiment_dataframe, TweetsCleaned, Emotion) 
+{
+    emos = levels(factor(sentiment_dataframe$emotion))
+    n_emos = length(emos)
+    emo.docs = rep("", n_emos)
+    TweetsCleaned = removeCustomeWords(TweetsCleaned)
+    for (i in 1:n_emos)
+    {
+        emo.docs[i] = paste(TweetsCleaned[Emotion ==
+        emos[i]], collapse=" ")
+    }
+    corpus = Corpus(VectorSource(emo.docs))
+    tdm = TermDocumentMatrix(corpus)
+    tdm = as.matrix(tdm)
+    colnames(tdm) = emos
+    require(wordcloud)
+  suppressWarnings(comparison.cloud(tdm, colors =
+  brewer.pal(n_emos, "Dark2"), scale = c(3,.5), random.order = FALSE, title.size = 1.5))
+}
+```
+
+```{r}
+getWordCloud(ZomatoDF, ZomatoCleaned, ZomatoEmotion)
+```
+
+```{r}
+getWordCloud(SwiggyDF, SwiggyCleaned, SwiggyEmotion)
+```
+

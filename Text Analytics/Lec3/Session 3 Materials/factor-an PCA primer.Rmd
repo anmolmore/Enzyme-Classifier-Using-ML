@@ -1,0 +1,250 @@
+---
+title: "Factorizing a Dummy Matrix - Walkthrough Example on R"
+author: Sudhir Voleti
+output:
+  html_document: default
+  html_notebook: default
+---
+
+## Factor-An via PCA - A primer on R
+
+Class,
+
+Plan here is to walk you through an example of *matrix factorization* and **see** the change in matrix information content that is retained with each change in the number of factor dimensions.  
+
+Seeing is believing, after all.
+
+## Step 1: Building a simple Matrix
+
+```{r build_A}
+# Building a dummy matrix and viewing it
+set.seed(1234)    # initializing random number generator to have identical output
+
+mat_fill = rexp(160)*rnorm(160)*10     # generating random numbers
+
+A = matrix(            # matrix() func creates a matrix
+          mat_fill,   # generating 160 random nums from a uniform distribution U(0,10)
+          nrow = 20, ncol = 8)     #  20 rows and 8 cols in the dummy matrix we build 
+
+dim(A)     # check A's dimn size
+
+round(A[1:5, 1:6], 2)     # view the top few rows & cols of the output
+
+```
+
+The matrix A can be said to be an 8-dimensional object (based on the # of columns it has).
+
+## Step 2: Standardizing the matrix
+
+But A isn't *unique*. You can always multiply all of A's numbers by the same scale-up (say, 10x) or scale-down number (say, 0.01x) and obtain another matrix that looks different but retains many of A's properties. 
+
+Hence, to avoid such scaling effects, we **standardize** matrices prior to factorization. I'm using one standardization approach among a few available.  
+
+I'll normalize each column to have mean zero (subtract each column's mean from it) and variance 1 (divide each column's de-meaned numbers by the std deviation of that column).
+
+```{r stdze_A}
+# standardize A as std_A before factorizing
+std_A = as.matrix(scale(A))
+    col_means = apply(A, 2, mean)
+    col_stdev = apply(A, 2, sd)
+    
+# This now is our original matrix, standardized
+    head(round(std_A, 2))
+    
+```
+
+
+## Step 3: Matrix-Factorizing using PCA
+
+I'll use the `princomp()` func in base R for factorizing `std_A` of dimension 20x8 into its *principal components*:  
+
++  a factor loadings matrix of dimension 8x8   
++  a factor scores matrix of dimension 20x8   
+
+as shown below. The product of the scores and the loadings matrix should recover the original `std_A`.
+
+```{r princomp}
+# now run PCA on A1 using princomp() func
+pc = princomp(std_A, scores = TRUE)
+  
+  # Extract loaings and scores factor matrices from the result
+  scores_matrix = pc$scores   
+  loadings_matrix = pc$loadings    
+  
+  # see what the top few rows look like for the scores matrix
+  dim(scores_matrix)
+  head(round(scores_matrix, 2))
+```
+
+The scores matrix a expected has dimension 20 x 8. Its columns are  principal components.
+
+Below is the size (8 x 8) and top-rows view of the loadings matrix.
+```{r}
+  # Now see top few rows for the loadings matrix
+  dim(loadings_matrix)
+  round(loadings_matrix[1:5,], 2)
+
+```
+
+The rows of the loadings matrix are the variables in A and the columns are principal components.
+
+## Step 4: Reassembling the original matrix A back again
+
+Finally, let's put together our original matrix A back again. Since the num of principal components is 8 (i.e., equal to the number of variables), I don;t expect to lose any information at all. IOW, recovery of A will be 100%. 
+
+```{r}
+# now recover original object back again...
+rec_std_A = scores_matrix %*% t(loadings_matrix)
+  #  rec_A = (rec_std_A * col_stdev) + col_means
+
+# view top-rows & first few cols of recovered matrix
+head(round(rec_std_A, 2))
+
+# compare with top-rows & first few cols of original matrix
+head(round(std_A, 2))
+```
+
+## Step 5: Recovering matrix from lower Dimensions
+
+Now rubber meets road. Consider this Q:
+
+>What if instead of 8 dimensions, we only had a smaller number of dimensions (say, 4 or 6) to work with? 
+
+And the Qs continue:
+
+> What if we want to find the most efficient 4 dimensional factor matrices that will *best* or most efficiently recover the original matrix? 
+
+Sure, we'll lose some information given that we're force-fitting a 8-D object into 4-Ds. Point is to make that information loss *minimal*. Let's see ...
+
+```{r fac4}
+# define func that takes matrix and #factors as inputs & outputs recovery
+factor_recover <- function(inp_matrix,    # input original matrix
+                           k){            # k = num of dimensions to reduce inp_matrix to
+  
+  std_mat = scale(inp_matrix)
+  pc1 = princomp(std_mat, scores = TRUE)
+  
+  reco_mat = pc1$scores[, 1:k] %*% t(pc1$loadings[,1:k])
+  
+  return(list(reco_mat, std_mat))  # returns a list containing the recovered & original matrices.
+
+  } # func ends
+
+# now invoke above func with k = 4
+a0 = factor_recover(std_A, 4)
+head(round(a0[[1]][, 1:6], 2))    # view recovered matrix top-few rows
+head(round(a0[[2]][, 1:6], 2))    # view original matrix top-few rows
+
+```
+
+OK, would things imporve or deteriorate if we made k = 5? IOW:   
+
+> If we project the original 8-D object to a 5-D space, will it retain more or less info than in a 4-D case?
+
+```{r 5fac}
+# as we raise k, info recovery gets better
+a0 = factor_recover(std_A, 5)      # k = 5 here
+head(round(a0[[1]], 2))    # view recovered matrix top-few rows
+head(round(a0[[2]], 2))    # view original matrix top-few rows
+
+```
+
+And what about the 3-D case?   
+
+We would expect info recovery to *worsen* compared to a 4-D case, and that's precisely what happens. Behold.  
+
+```{r}
+# as we raise k, info recovery gets better
+a0 = factor_recover(std_A, 3)      # k = 3 here
+head(round(a0[[1]], 2))    # view recovered matrix top-few rows
+head(round(a0[[2]], 2))    # view original matrix top-few rows
+```
+
+So we see that as K rises, info recovery rises and as it falls, so does info recovery. But not necessarily at the same rate.
+
+We want to reduce dimensionality because too many inter-related variables mess up our analysis. But we don't want to over-reduce either because we end up losing too much information content.
+
+So there's a tradeoff. Maybe there's an optimal level at which the balance between dimension-reduction and info recovery is best? 
+
+Which brings up the Q, can we **measure** info loss or recovery %? Unless we measure it, we can't manage it, after all. 
+
+## Step 6: Measure Info loss to decide on optimal #dimensions
+
+There're several metrics to measure info gain/loss. 
+
+I'll use one of the simplest here, just for demo purposes - the RMSE.
+
+The RMSE or root mean squared error is the root of the mean of the squares of the element-by-element differences (or 'errors') between the recovered and original matrices. 
+
+I build a `rmse_cal()` func and here we go.
+
+```{r rmse.calc}
+# define func to RMSE calculation
+rmse_calc <- function(inp_matrix, k){     # same inputs as with factor_recover()
+  
+  a0 = factor_recover(inp_matrix, k)     # incoking a user-defined func inside a user-defined func. :)
+  error_mat = a0[[1]] - a0[[2]]
+  error_sq = error_mat * error_mat       
+  rmse = sqrt(mean(error_sq))
+  
+  return(rmse)
+}    # func ends
+
+n = ncol(std_A)
+rmse_mat = matrix(1:n, n, 2)
+colnames(rmse_mat) = c("num_dimensions", "RMSE")
+
+for (i in 1:n){
+  rmse_mat[i, 2] = round(rmse_calc(std_A, i), 3)
+}
+
+rmse_mat
+```
+
+Aha, so there it is. Note the RMSE progressively reducing as num_dimensions rise. Expected. 
+
+As num_dimensions rises, info retained rises and RMSE falls. Exactly a expected. And when # variables = # dimensions, the recovery is 100%, RMSE is zero.
+
+Let's plot what we got to get a hang of the rates at which RMSE changed with change in num_dimension. See below.
+
+```{r rmse_plot}
+rmse_df = data.frame(rmse_mat)
+
+plot(x = rmse_df$num_dimensions, y = rmse_df$RMSE, 
+     type = "b", col = "red", 
+     lwd = 2, lty = 3)
+```
+Well, the line is almost straight suggesting the rate of increase in info contant recovery is proportional to num_dimensions.
+
+That is unsurprising given that we generated random data for simulation and the matrix's columns were not inter-related at all.
+
+In real datasets, where matrix columns are indeed *inter-related*, we should expect to see a more nonlinear decline making it easy to pinpoint an optimal num_dimensions.
+
+For instace, take mtcars - a 1974 dataset of 32 cars and 11 car attributes where we can expect some inter-relation between attrbutes. For instance, car mileage (mpg) will be inversely related to car weight (wt) and so on.
+
+```{r}
+data(mtcars)
+str(mtcars)    # see what variables are there in the dataset
+
+```
+
+Let's use the funcs defined above to quickly factorize the data and see what we get in terms of RMSE plots.
+
+```{r mtcars}
+n = ncol(mtcars)
+rmse_mat = matrix(1:n, n, 2)
+colnames(rmse_mat) = c("num_dimensions", "RMSE")
+
+for (i in 1:n){   rmse_mat[i, 2] = round(rmse_calc(mtcars, i), 3)     }
+
+rmse_df = data.frame(rmse_mat)
+plot(x = rmse_df$num_dimensions, y = rmse_df$RMSE,
+     type = "b", col = "red",
+     lwd = 2, lty = 3)
+```
+
+Above, K = 2 seems like a good choice for num_dimensions to reduce to. Because there we see the sharpest drop in RMSE.
+
+So let me stop here with the remark that its not just the technical contents of this markdown that is important, but also the main intuition for what is happening and why.
+
+Sudhir Voleti
